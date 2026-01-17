@@ -1,0 +1,77 @@
+---
+session: ter
+date: 2026-01-17
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Implemented agent launcher feature with remote directory browser
+now: Test the app on device - verify project creation, directory browsing, and launch flow
+
+test: npx tsc --noEmit
+
+done_this_session:
+  - task: Added Project, Command, RecentLaunch types
+    files: [lib/types.ts]
+  - task: Created projects store with AsyncStorage persistence
+    files: [lib/projects-store.tsx, app/_layout.tsx]
+  - task: Added agent endpoints for scripts and directory listing
+    files: [agent/server.js]
+  - task: Added API functions for scripts and directories
+    files: [lib/api.ts]
+  - task: Installed bottom-sheet and gesture handler
+    files: [package.json]
+  - task: Created LaunchSheet component with recent/host/project/commands
+    files: [components/LaunchSheet.tsx]
+  - task: Created DirectoryBrowser for remote file navigation
+    files: [components/DirectoryBrowser.tsx]
+  - task: Created project management screens
+    files: [app/projects/new.tsx, app/projects/index.tsx, app/projects/[id]/commands.tsx]
+  - task: Added launch FAB and projects button to home screen
+    files: [app/index.tsx, components/icons/HomeIcons.tsx]
+
+blockers: []
+
+questions:
+  - Does the directory browser work correctly on Android? (Modal + scrolling)
+  - Is the agent restart needed to pick up new endpoints?
+
+decisions:
+  - remote_directory_browser: User preferred browsing over typing paths
+  - bottom_sheet_library: Used @gorhom/bottom-sheet (well-maintained, RN standard)
+  - package_json_detection: Agent marks folders with package.json for quick project identification
+
+findings:
+  - existing_pattern: App uses Context + AsyncStorage for state (hosts, keybinds)
+  - session_creation: POST /sessions creates tmux session, sendText runs commands
+  - gesture_handler: Required for bottom-sheet, added GestureHandlerRootView wrapper
+
+worked:
+  - Following existing store.tsx pattern for projects-store
+  - Modal for directory browser (clean UX)
+  - Auto-filling project name from selected directory
+
+failed: []
+
+next:
+  - Test on physical device
+  - Restart agent to pick up new endpoints
+  - Verify launch flow creates session and navigates to terminal
+  - Test directory browser on both iOS and Android
+
+files:
+  created:
+    - lib/projects-store.tsx
+    - components/LaunchSheet.tsx
+    - components/DirectoryBrowser.tsx
+    - app/projects/new.tsx
+    - app/projects/index.tsx
+    - app/projects/[id]/commands.tsx
+  modified:
+    - lib/types.ts
+    - lib/api.ts
+    - agent/server.js
+    - app/_layout.tsx
+    - app/index.tsx
+    - components/icons/HomeIcons.tsx
+    - package.json

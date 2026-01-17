@@ -1,0 +1,85 @@
+---
+session: ter
+date: 2026-01-17
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Implemented Bridge app redesign with native iOS tabs, system colors, and unified Docker view
+now: Test app in Expo Go, verify all tabs work, check usage cards display
+test: npx expo start --ios  # verify app loads and tabs function
+
+done_this_session:
+  - task: Created native theme system with PlatformColor
+    files: [lib/colors.ts, lib/theme.ts]
+  - task: Converted to NativeTabs with 4 tabs (Sessions, Hosts, Docker, More)
+    files: [app/(tabs)/_layout.tsx, app/(tabs)/index.tsx, app/(tabs)/hosts.tsx, app/(tabs)/docker.tsx, app/(tabs)/more.tsx]
+  - task: Built unified Docker view with host filtering
+    files: [lib/docker-hooks.ts, app/(tabs)/docker.tsx]
+  - task: Created SessionCard and HostCard components
+    files: [components/SessionCard.tsx, components/HostCard.tsx]
+  - task: Added usage cards for Claude/Codex with progress bars
+    files: [app/(tabs)/index.tsx]
+  - task: Moved LaunchSheet to root layout for proper z-index
+    files: [lib/launch-sheet.tsx, app/_layout.tsx]
+  - task: Polished all pages with native iOS style
+    files: [app/hosts/[id]/index.tsx, app/ports/index.tsx, app/projects/index.tsx, app/keybinds.tsx]
+  - task: Removed unused routes (hosts/index.tsx, hosts/[id]/docker.tsx)
+    files: []
+
+blockers: []
+
+questions:
+  - Does liquid glass render correctly on iOS 26+ simulator?
+
+decisions:
+  - launch_button_location: Header next to title (FAB removed, NativeTabs doesn't support accessories)
+  - usage_bar_direction: Shows percent remaining (not percent used)
+  - docker_route_consolidation: Removed per-host docker list, unified tab handles all with filtering
+
+findings:
+  - nativetabs_role_limited: NativeTabs roles are predefined iOS system items only (search, history, etc.)
+  - launch_sheet_zindex: Moving to root layout fixes z-index above native tab bar
+  - date_format_api: Reset times come as ISO timestamps, need parsing to relative time
+
+worked:
+  - Agent orchestration for 10-task implementation (context-efficient)
+  - Global context for LaunchSheet state
+  - hostId query param for Docker tab filtering
+
+failed:
+  - Tried NativeTabs accessory button (not supported)
+
+next:
+  - Test in Expo Go on iOS device/simulator
+  - Verify usage cards show real data from agent
+  - Add animations/polish if needed
+  - Consider adding long-press on sessions to open detail page
+
+files:
+  created:
+    - lib/colors.ts
+    - lib/docker-hooks.ts
+    - lib/launch-sheet.tsx
+    - app/(tabs)/_layout.tsx
+    - app/(tabs)/index.tsx
+    - app/(tabs)/hosts.tsx
+    - app/(tabs)/docker.tsx
+    - app/(tabs)/more.tsx
+    - components/SessionCard.tsx
+    - components/HostCard.tsx
+    - components/PulsingDot.tsx
+    - components/Skeleton.tsx
+    - components/SwipeableRow.tsx
+  modified:
+    - app/_layout.tsx
+    - app/hosts/[id]/index.tsx
+    - app/ports/index.tsx
+    - app/projects/index.tsx
+    - app/keybinds.tsx
+    - lib/theme.ts
+    - components/Screen.tsx
+    - components/AppText.tsx
+    - components/Pill.tsx
+    - components/GlassCard.tsx
+    - app.json

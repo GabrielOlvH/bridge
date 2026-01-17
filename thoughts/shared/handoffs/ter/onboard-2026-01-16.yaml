@@ -1,0 +1,190 @@
+session: ter-onboard
+created: 2026-01-16T19:31:00Z
+updated: 2026-01-16T19:31:00Z
+status: active
+
+goal: |
+  Fix bugs / maintenance on Tmux Dock - a React Native (Expo) app for managing
+  tmux sessions across multiple hosts with live terminal access.
+
+project:
+  name: Tmux Dock (ter)
+  type: Mobile app (React Native + Expo) + Node.js backend agent
+  path: /home/gabrielolv/Documents/Projects/ter
+
+tech_stack:
+  runtime: Expo ~54.0.31
+  framework: React Native 0.81.5 with Expo Router 6.0
+  language: TypeScript 5.9.2
+  ui_library: React 19.1.0
+  state_management: Context API (custom StoreProvider)
+  storage: AsyncStorage (@react-native-async-storage/async-storage)
+  routing: expo-router (file-based routing)
+  terminal: xterm.js (via WebView) + WebSocket
+  icons: lucide-react-native
+  backend: Node.js WebSocket + REST API server (in agent/)
+
+architecture:
+  description: |
+    Two-part system:
+    1. React Native mobile app with Expo Router for navigation
+    2. Node.js agent server that runs on remote hosts to control tmux
+
+  app_structure:
+    - app/: File-based routing (Expo Router)
+      - index.tsx: Home screen
+      - hosts/: Host management screens (list, new, edit)
+      - session/[hostId]/[name]/: Session detail screens (view, terminal)
+      - keybinds.tsx: Keybind configuration panel
+    - components/: Reusable UI components (Field, Pill, Screen, TerminalLine, etc.)
+    - lib/: Core business logic
+      - api.ts: REST client for agent endpoints
+      - store.tsx: Global state management (hosts, keybinds)
+      - storage.ts: AsyncStorage persistence
+      - types.ts: TypeScript type definitions
+      - commands.ts: SSH/Mosh command generation
+      - ansi.ts: ANSI parsing for terminal output
+      - theme.ts: Theme utilities
+    - agent/: Backend Node.js server
+      - index.js: Express + WebSocket server for tmux control
+
+  data_flow:
+    - User manages host profiles (stored via AsyncStorage)
+    - App connects to agent REST API at http://<host>:4020
+    - Agent executes tmux commands on remote host
+    - Terminal view uses WebSocket at /ws for live xterm.js sessions
+
+key_files:
+  entry_points:
+    - app/index.tsx: App home screen
+    - app/_layout.tsx: Root layout with StoreProvider
+    - agent/index.js: Backend server entry point
+
+  core_logic:
+    - lib/api.ts: 12 API functions (getHealth, getSessions, createSession, killSession, sendKeys, etc.)
+    - lib/store.tsx: Global state (hosts, keybinds) with React Context
+    - lib/types.ts: Core types (Host, Session, Keybind, SessionInsights)
+
+  ui_components:
+    - components/HostForm.tsx: Host configuration form
+    - components/TerminalLine.tsx: ANSI-aware terminal line renderer
+    - app/session/[hostId]/[name]/terminal.tsx: Full terminal via WebView
+
+features:
+  - Multiple host profiles with per-host auth tokens
+  - Live session lists with auto-refresh
+  - Create/kill/rename tmux sessions remotely
+  - SSH/Mosh command generator for attach
+  - Keybind panel to send tmux keys remotely
+  - Full TUI terminal via WebView + xterm.js
+  - Session insights (git status, agent state, token usage)
+  - Persistent host storage with AsyncStorage
+
+agent_api:
+  base_url: http://<host>:4020
+  environment:
+    - TMUX_AGENT_PORT: (default 4020)
+    - TMUX_AGENT_TOKEN: Optional bearer token
+    - TMUX_AGENT_HOST: Optional label override
+    - TMUX_AGENT_SOCKET: Optional tmux socket path
+
+  endpoints:
+    - GET /health: Health check
+    - GET /sessions: List tmux sessions
+    - POST /sessions: Create session
+    - POST /sessions/:name/rename: Rename session
+    - POST /sessions/:name/kill: Kill session
+    - POST /sessions/:name/keys: Send keybinds
+    - POST /sessions/:name/resize: Resize terminal
+    - GET /sessions/:name/capture: Capture session output
+    - WS /ws: WebSocket for live terminal
+
+build_commands:
+  app:
+    install: npm install
+    start: npm start
+    android: npm run android
+    ios: npm run ios
+    web: npm run web
+
+  agent:
+    install: cd agent && npm install
+    start: cd agent && npm start
+
+test_commands:
+  - No test suite detected yet
+
+constraints:
+  - Follow existing TypeScript patterns (strict mode enabled)
+  - Use Expo Router file-based routing conventions
+  - Maintain compatibility with React 19.1.0
+  - Keep agent server lightweight and minimal
+  - Use AsyncStorage for all persistence
+  - Follow existing component patterns (Themed wrappers)
+
+maintenance_focus:
+  common_areas:
+    - WebSocket connection stability in terminal view
+    - API timeout handling (DEFAULT_TIMEOUT_MS in api.ts)
+    - Host connectivity status detection
+    - Session insights polling and error handling
+    - ANSI parsing edge cases in lib/ansi.ts
+    - AsyncStorage migration/persistence issues
+
+  known_patterns:
+    - All API calls use central request() function with timeout
+    - Host state managed via StoreProvider context
+    - File-based routing in app/ directory
+    - Platform-specific hooks (.web.ts variants exist)
+
+  potential_issues:
+    - Network error handling across API calls
+    - WebSocket reconnection logic
+    - Race conditions in session list refresh
+    - ANSI escape code parsing edge cases
+    - Mobile-specific rendering issues (iOS vs Android)
+
+next_steps:
+  recommended:
+    - Check for open issues or bug reports
+    - Test WebSocket terminal connection stability
+    - Review error handling in api.ts request function
+    - Test session insights polling behavior
+    - Verify AsyncStorage persistence across app restarts
+    - Test agent server on actual remote hosts
+
+  commands_to_run:
+    - npm install (install app dependencies)
+    - cd agent && npm install (install agent dependencies)
+    - npm start (start Expo dev server)
+    - cd agent && npm start (start agent server on port 4020)
+
+open_questions:
+  - Are there known bugs or issues to fix?
+  - Which hosts are currently configured for testing?
+  - Is the agent server deployed anywhere?
+  - What's the most common failure mode?
+  - Are there any recent error logs or crash reports?
+
+codebase_summary: |
+  Tmux Dock is a React Native mobile app built with Expo that manages tmux sessions
+  across multiple remote hosts. The architecture consists of:
+
+  1. Mobile app (Expo Router + React Native 0.81.5)
+     - File-based routing in app/
+     - Global state via Context API (lib/store.tsx)
+     - AsyncStorage for persistence
+     - REST API client (lib/api.ts) for agent communication
+     - Full terminal view via WebView + xterm.js + WebSocket
+
+  2. Node.js agent server (agent/index.js)
+     - REST API for tmux operations
+     - WebSocket server for live terminal access
+     - Runs on remote hosts (default port 4020)
+     - Optional bearer token authentication
+
+  The app allows users to manage multiple hosts, view tmux sessions, create/kill/rename
+  sessions, send keybinds remotely, and access full terminal sessions via xterm.js.
+
+  Key maintenance areas: WebSocket stability, API error handling, session insights
+  polling, ANSI parsing, and cross-platform mobile rendering.

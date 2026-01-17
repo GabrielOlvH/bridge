@@ -1,0 +1,54 @@
+---
+session: ter
+date: 2026-01-17
+status: partial
+outcome: PARTIAL_PLUS
+---
+
+goal: Terminal header UI - concave corners connecting buttons to center border
+now: Fix right corner curve direction (inward→outward) and add bottom corner rounding
+
+done_this_session:
+  - task: Created HeaderButtonGroup component with SVG background
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Implemented onLayout-based SVG sizing for dynamic dimensions
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Added concave corner curves using quadratic bezier paths
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+
+blockers: []
+
+questions:
+  - Should bottom corners use same CORNER_SIZE as top concave corners?
+
+decisions:
+  - svg_background: Using SVG as absolute fill behind button content for flexible sizing
+  - quadratic_bezier: Q command for smooth concave curves (simpler than arc)
+  - onlayout_measurement: Measure container then draw SVG to fit
+
+findings:
+  - overflow_visible_needed: React Native clips absolutely positioned children by default
+  - svg_inline_works: Placing SVG directly in flex row works better than absolute positioning
+  - curve_direction: Q command control point determines curve bulge direction
+
+worked:
+  - HeaderButtonGroup component with onLayout measurement
+  - SVG absoluteFill with overflow:visible on parent
+  - Quadratic bezier paths for concave corners
+
+failed:
+  - Absolute positioned corner SVGs outside parent bounds (clipped)
+  - Arc commands (A) - harder to control than quadratic bezier
+  - Hardcoded SVG dimensions - doesn't adapt to content
+
+next:
+  - Fix right corner strokePath - curve going wrong direction
+  - Add borderBottomLeftRadius/borderBottomRightRadius to button containers
+  - Apply same pattern to docker terminal (app/hosts/[id]/docker/[containerId]/terminal.tsx)
+  - Remove test colors and use proper BG_COLOR/BORDER_COLOR
+
+files:
+  created: []
+  modified:
+    - app/session/[hostId]/[name]/terminal.tsx
+    - app/hosts/[id]/docker/[containerId]/terminal.tsx

@@ -1,0 +1,61 @@
+---
+session: ter
+date: 2026-01-17
+status: partial
+outcome: PARTIAL_MINUS
+---
+
+goal: Add horizontal swipe navigation between terminal sessions
+now: Debug the flash issue when switching sessions - try using react-native-pager-view instead
+
+test: npx tsc --noEmit
+
+done_this_session:
+  - task: Analyzed tmux features that could enhance the app
+    files: []
+  - task: Implemented horizontal swipe gesture detection with Reanimated
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Added session query to fetch all sessions for navigation
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Disabled navigation animation for terminal route
+    files: [app/_layout.tsx]
+
+blockers:
+  - Flash still occurs when switching sessions despite multiple refactoring attempts
+  - Root cause: React re-renders when currentSessionName state changes, even though WebView positions are stable
+
+questions:
+  - Would react-native-pager-view handle this better? It's designed for exactly this use case
+  - Is the WebView source object truly stable? Even with sourceCache ref, something may be triggering reload
+
+decisions:
+  - cumulative_offset: Changed from resetting translateX to 0 to keeping cumulative offset
+  - fixed_positions: All WebViews now at fixed left positions (index * screenWidth)
+  - reanimated_shared_values: Using useSharedValue for offsetX to avoid JS/UI thread sync issues
+
+findings:
+  - mixing_state_and_animation: Mixing React state (currentSessionName) with Animated values in transform causes flash
+  - webview_source_sensitivity: WebView reloads if source object reference changes, even if content is same
+  - gesture_conflict: failOffsetY needed to let vertical gestures pass through to WebView
+
+worked:
+  - Using Gesture.Pan().activeOffsetX().failOffsetY() for gesture direction detection
+  - Caching source objects in useRef to maintain stable references
+  - Cumulative offsetX that never resets
+
+failed:
+  - Resetting translateX to 0 after animation - causes visual jump
+  - Using sessionIndex in transform calculation - state/animation mismatch
+  - Multiple incremental fixes - made code more complex without fixing root issue
+
+next:
+  - Consider using react-native-pager-view for horizontal paging
+  - Or investigate if there's still a source object reference issue
+  - Test with only 2 sessions to isolate the problem
+  - May need to memoize the entire WebView component
+
+files:
+  created: []
+  modified:
+    - app/session/[hostId]/[name]/terminal.tsx
+    - app/_layout.tsx

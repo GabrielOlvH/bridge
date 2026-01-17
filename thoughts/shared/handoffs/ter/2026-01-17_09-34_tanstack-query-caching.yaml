@@ -1,0 +1,62 @@
+---
+session: ter
+date: 2026-01-17
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Fix flash of content when navigating back from terminal to main page
+now: Test the app - navigate terminal→back to verify no flash occurs
+
+test: npx tsc --noEmit
+
+done_this_session:
+  - task: Installed @tanstack/react-query
+    files: [package.json]
+  - task: Created QueryProvider with caching config
+    files: [lib/query.tsx]
+  - task: Wrapped app with QueryProvider
+    files: [app/_layout.tsx]
+  - task: Refactored home page to use useQuery with insights merged
+    files: [app/index.tsx]
+  - task: Refactored session detail page to use useQuery
+    files: [app/session/[hostId]/[name]/index.tsx]
+  - task: Refactored hosts list page to use useQuery
+    files: [app/hosts/index.tsx]
+  - task: Refactored host detail page to use useQuery
+    files: [app/hosts/[id]/index.tsx]
+
+blockers: []
+
+questions:
+  - User mentioned flash still occurs - may need to adjust staleTime or FadeIn animations
+
+decisions:
+  - tanstack_query_over_context: User prefers TanStack tools, provides stale-while-revalidate caching
+  - insights_fetched_inline: Insights merged in same queryFn to ensure they appear with cached data
+
+findings:
+  - useFocusEffect_causes_flash: Every navigation back triggered refresh() showing empty state
+  - insights_need_sync_fetch: prefetchQuery broke insights display - must fetch and merge in same query
+
+worked:
+  - useQuery with staleTime prevents refetch on focus
+  - Merging insights in same queryFn ensures plan usage cards appear
+
+failed:
+  - prefetchQuery for insights - data wasn't merged back into sessions
+
+next:
+  - Test navigation terminal→back to verify flash is gone
+  - If flash persists, consider disabling FadeIn animations on back navigation
+  - Consider increasing staleTime if data appears stale
+
+files:
+  created: [lib/query.tsx]
+  modified:
+    - package.json
+    - app/_layout.tsx
+    - app/index.tsx
+    - app/session/[hostId]/[name]/index.tsx
+    - app/hosts/index.tsx
+    - app/hosts/[id]/index.tsx

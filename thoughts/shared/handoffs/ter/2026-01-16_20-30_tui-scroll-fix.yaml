@@ -1,0 +1,59 @@
+---
+session: ter-tui-scroll
+date: 2026-01-16
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Fix TUI scrolling in terminal WebView - touch scroll now sends mouse wheel events
+now: Fine-tune scroll sensitivity/direction in PanResponder - currently testing 60px threshold
+
+test: npm start && test scrolling in Claude Code session on phone
+
+done_this_session:
+  - task: Identified root cause - scrollLines() only works for scrollback buffer, not TUI apps
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Added alternate buffer detection via term.buffer.active.type
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Implemented SGR mouse wheel events for TUI scrolling
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Moved touch handlers from .xterm-viewport to document.body
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+  - task: Added WebView props to disable native scroll handling
+    files: [app/session/[hostId]/[name]/terminal.tsx]
+
+blockers: []
+
+questions:
+  - Is current scroll direction correct for user preference?
+  - Is 60px threshold the right sensitivity?
+
+decisions:
+  - mouse_wheel_over_keys: Arrow keys cycle input history, Page Up/Down didn't work in Claude Code, mouse wheel events work universally
+  - sgr_format: Used SGR mouse format (\x1b[<64;col;rowM) for scroll up, (\x1b[<65;col;rowM) for scroll down
+
+findings:
+  - tui_alternate_buffer: TUI apps (vim, less, Claude Code) use alternate screen buffer where scrollLines() has no effect
+  - xterm_layers: Touch events on .xterm-viewport don't fire because canvas layers are stacked on top
+  - panresponder_primary: React Native PanResponder handles most touch events, not WebView internal handlers
+
+worked:
+  - SGR mouse wheel escape sequences work for Claude Code and other TUIs
+  - document.body touch handlers capture all events
+  - scrollEnabled={false} on WebView prevents native scroll interference
+
+failed:
+  - Arrow keys (\x1b[A/B) cycle input history instead of scrolling
+  - Page Up/Down (\x1b[5~/6~) works for some TUIs but not Claude Code
+  - Viewport-based touch handlers don't receive events
+
+next:
+  - Test current scroll implementation with user
+  - Adjust threshold if still too fast/slow
+  - Verify scroll direction is correct
+  - Consider adding user-configurable scroll sensitivity
+
+files:
+  created: []
+  modified:
+    - app/session/[hostId]/[name]/terminal.tsx

@@ -1,0 +1,35 @@
+import 'dotenv/config';
+import { startServer } from './server';
+import { USAGE_POLL_INTERVAL, TOKEN_POLL_INTERVAL } from './config';
+import { startUsageRefresh, primeTokenRefresh } from './usage';
+import { claudeSession } from './state';
+import { logStartup } from './log';
+
+startServer();
+logStartup();
+
+if (USAGE_POLL_INTERVAL > 0) {
+  startUsageRefresh();
+  setInterval(() => {
+    startUsageRefresh();
+  }, USAGE_POLL_INTERVAL);
+}
+
+process.on('exit', () => {
+  for (const cleanup of claudeSession.listeners) {
+    try {
+      cleanup();
+    } catch {}
+  }
+  claudeSession.listeners.clear();
+  try {
+    claudeSession.term?.kill();
+  } catch {}
+});
+
+if (TOKEN_POLL_INTERVAL > 0) {
+  primeTokenRefresh();
+  setInterval(() => {
+    primeTokenRefresh();
+  }, TOKEN_POLL_INTERVAL);
+}

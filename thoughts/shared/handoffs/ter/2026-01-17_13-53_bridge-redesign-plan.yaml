@@ -1,0 +1,59 @@
+---
+session: ter
+date: 2026-01-17
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Plan Bridge app redesign - native iOS feel with NativeTabs, system colors, fewer taps to Docker
+now: Start implementing Task 1 (native theme with PlatformColor) and Task 2 (NativeTabs structure)
+test: npx expo start --ios  # verify app loads in Expo Go
+
+done_this_session:
+  - task: Explored current codebase structure and navigation
+    files: [app/index.tsx, app/hosts/[id]/index.tsx, app/hosts/[id]/docker.tsx]
+  - task: Designed new navigation (4 tabs - Sessions, Hosts, Docker, More)
+    files: [thoughts/shared/plans/PLAN-bridge-redesign.md]
+  - task: Chose visual identity - native iOS with system colors
+    files: [thoughts/shared/plans/PLAN-bridge-redesign.md]
+  - task: Verified Expo Go compatibility for NativeTabs and components
+    files: []
+
+blockers: []
+
+questions:
+  - Android drawable alternatives for SF Symbols in NativeTabs?
+
+decisions:
+  - app_name: Bridge (command center / starship bridge vibes)
+  - visual_style: Native iOS system-adaptive (not custom dark/neon)
+  - tab_bar: NativeTabs with liquid glass (works in Expo Go)
+  - colors: PlatformColor for system colors (auto light/dark)
+  - lists: gesture-handler Swipeable (Expo Go compatible, not @expo/ui)
+  - context_menus: Alert.alert fallback (native menus need dev build)
+
+findings:
+  - nativetabs_expo_go: NativeTabs works in Expo Go (confirmed via GitHub issues)
+  - expo_ui_needs_devbuild: "@expo/ui SwiftUI components require development build"
+  - current_docker_taps: Docker requires 2-3 taps currently, goal is 1 tap
+
+worked:
+  - WebSearch for verifying Expo Go compatibility
+  - Reading GitHub issues to confirm NativeTabs works in Expo Go
+
+failed:
+  - Initially assumed @expo/ui worked in Expo Go (it doesn't)
+
+next:
+  - Create lib/colors.ts with PlatformColor mappings
+  - Create app/(tabs)/_layout.tsx with NativeTabs
+  - Create app/(tabs)/index.tsx (Sessions)
+  - Create app/(tabs)/hosts.tsx
+  - Create app/(tabs)/docker.tsx (unified view)
+  - Create app/(tabs)/more.tsx
+  - Update components to use system colors
+
+files:
+  created:
+    - thoughts/shared/plans/PLAN-bridge-redesign.md
+  modified: []

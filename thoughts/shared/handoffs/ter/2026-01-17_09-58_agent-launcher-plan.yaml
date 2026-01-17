@@ -1,0 +1,57 @@
+---
+session: ter
+date: 2026-01-17
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Plan agent launcher feature - launch any command from home screen bottom sheet
+now: Review plan at thoughts/shared/plans/PLAN-agent-launcher.md and approve for implementation
+
+test: pnpm typecheck && pnpm lint
+
+done_this_session:
+  - task: Explored codebase structure and patterns
+    files: [lib/types.ts, lib/store.tsx, lib/api.ts, app/index.tsx]
+  - task: Interviewed user for UX requirements
+    files: []
+  - task: Created implementation plan with 12 tasks
+    files: [thoughts/shared/plans/PLAN-agent-launcher.md]
+  - task: Created plan handoff document
+    files: [thoughts/shared/handoffs/ter/2026-01-17_plan-agent-launcher.md]
+
+blockers: []
+
+questions:
+  - Where exactly is the agent backend code? (packages/agent/src/index.ts or elsewhere)
+  - Is @gorhom/bottom-sheet compatible with current Expo/RN version?
+
+decisions:
+  - bottom_sheet_ux: User preferred bottom sheet over wizard or dedicated tab
+  - per_host_projects: Each host has own project list (not global with overrides)
+  - on_demand_scripts: Fetch package.json when project selected (not cached)
+  - in_app_commands: Custom commands added via app form, not project config file
+  - auto_session_names: Generate names like projectName-timestamp (no prompt)
+  - any_command: Not limited to agent CLIs - any command string works
+
+findings:
+  - existing_pattern: App uses Context + AsyncStorage for state (hosts, keybinds)
+  - terminal_works: WebView + xterm.js attachment already implemented
+  - session_api: POST /sessions to host agent creates tmux sessions
+
+worked:
+  - Scout agent for codebase exploration
+  - Iterative AskUserQuestion for UX requirements gathering
+
+failed: []
+
+next:
+  - User reviews plan at thoughts/shared/plans/PLAN-agent-launcher.md
+  - Run /implement_plan to start implementation
+  - Begin with Tasks 1-5 (foundation) before UI tasks
+
+files:
+  created:
+    - thoughts/shared/plans/PLAN-agent-launcher.md
+    - thoughts/shared/handoffs/ter/2026-01-17_plan-agent-launcher.md
+  modified: []
