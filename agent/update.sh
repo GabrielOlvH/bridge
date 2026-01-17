@@ -16,13 +16,19 @@ fi
 
 cd "$INSTALL_DIR"
 
+# Determine which branch to use
+BRANCH="master"
+if git rev-parse --verify origin/main &>/dev/null; then
+    BRANCH="main"
+fi
+
 # Fetch latest from remote
 log "Checking for updates..."
-git fetch origin main --quiet 2>/dev/null || git fetch origin master --quiet 2>/dev/null
+git fetch origin "$BRANCH" --quiet
 
 # Get current and remote commits
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse --verify origin/master)
+REMOTE=$(git rev-parse "origin/$BRANCH")
 
 if [ "$LOCAL" = "$REMOTE" ]; then
     log "Already up to date ($(echo $LOCAL | head -c 7))"
@@ -36,11 +42,28 @@ CHANGES=$(git diff --name-only "$LOCAL" "$REMOTE")
 log "Changed files:"
 echo "$CHANGES" | while read file; do echo "  - $file"; done
 
-# Pull changes
+# Stash any local changes
+STASHED=false
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    log "Stashing local changes..."
+    git stash push -m "auto-update stash"
+    STASHED=true
+fi
+
+# Pull changes (use rebase to keep history clean)
 log "Pulling changes..."
-if ! git pull origin main 2>/dev/null && ! git pull origin master 2>/dev/null; then
+if ! git pull --rebase origin "$BRANCH"; then
     log "Error: Failed to pull changes. Manual intervention may be required."
+    if [ "$STASHED" = true ]; then
+        git stash pop
+    fi
     exit 1
+fi
+
+# Restore stashed changes
+if [ "$STASHED" = true ]; then
+    log "Restoring local changes..."
+    git stash pop || log "Warning: Could not restore local changes cleanly"
 fi
 
 # Check if dependencies changed
