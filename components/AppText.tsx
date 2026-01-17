@@ -1,8 +1,8 @@
 import React from 'react';
 import { Text, TextProps, StyleSheet, Platform } from 'react-native';
-import { systemColors } from '@/lib/colors';
+import { useTheme } from '@/lib/useTheme';
 
-const styles = StyleSheet.create({
+const textStyles = StyleSheet.create({
   title: {
     fontFamily: Platform.select({
       ios: 'System',
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
 });
 
 export type AppTextProps = TextProps & {
-  variant?: keyof typeof styles;
+  variant?: keyof typeof textStyles;
   tone?:
     | 'primary'
     | 'secondary'
@@ -71,22 +71,24 @@ export type AppTextProps = TextProps & {
 };
 
 export function AppText({ variant = 'body', tone = 'primary', style, ...props }: AppTextProps) {
+  const { colors } = useTheme();
+
   const toneColor = {
-    primary: systemColors.label,
-    secondary: systemColors.secondaryLabel,
-    accent: systemColors.blue,
-    success: systemColors.green,
-    error: systemColors.red,
-    warning: systemColors.orange,
-    ink: systemColors.label,
-    muted: systemColors.secondaryLabel,
-    clay: systemColors.orange,
+    primary: colors.text,
+    secondary: colors.textSecondary,
+    accent: colors.blue,
+    success: colors.green,
+    error: colors.red,
+    warning: colors.orange,
+    ink: colors.text,
+    muted: colors.textMuted,
+    clay: colors.orange,
   }[tone];
 
   return (
     <Text
       {...props}
-      style={[styles[variant], { color: toneColor }, style]}
+      style={[textStyles[variant], { color: toneColor }, style]}
     />
   );
 }

@@ -26,6 +26,7 @@ import Animated, {
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { useStore } from '@/lib/store';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { getSessionInsights, getSessions, uploadImage } from '@/lib/api';
 import { SessionInsights } from '@/lib/types';
 
@@ -51,7 +52,11 @@ function buildWsUrl(host: { baseUrl: string; authToken?: string }, sessionName: 
   }
 }
 
-function buildTerminalHtml(wsUrl: string): string {
+function buildTerminalHtml(
+  wsUrl: string,
+  theme: { background: string; foreground: string; cursor: string }
+): string {
+  const { background, foreground, cursor } = theme;
   return `<!doctype html>
 <html>
   <head>
@@ -59,7 +64,7 @@ function buildTerminalHtml(wsUrl: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="https://unpkg.com/xterm/css/xterm.css" />
     <style>
-      html, body { height: 100%; margin: 0; background: #0B0D0F; overflow: hidden; }
+      html, body { height: 100%; margin: 0; background: ${background}; overflow: hidden; }
       #terminal { height: 100%; width: 100%; padding-left: 4px; }
     </style>
   </head>
@@ -74,7 +79,7 @@ function buildTerminalHtml(wsUrl: string): string {
         fontFamily: 'JetBrainsMono, Menlo, monospace',
         fontSize: 12,
         allowProposedApi: true,
-        theme: { background: '#0B0D0F', foreground: '#E6EDF3', cursor: '#E6EDF3' },
+        theme: { background: '${background}', foreground: '${foreground}', cursor: '${cursor}' },
       });
       const fitAddon = new FitAddon.FitAddon();
       const webglAddon = new WebglAddon.WebglAddon();
@@ -270,6 +275,7 @@ function buildTerminalHtml(wsUrl: string): string {
 
 export default function SessionTerminalScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ hostId: string; name: string }>();
   const initialSessionName = decodeURIComponent(params.name ?? '');
   const { hosts } = useStore();
@@ -282,6 +288,15 @@ export default function SessionTerminalScreen() {
   const [isSelecting, setIsSelecting] = useState(false);
   const webRefs = useRef<Record<string, WebView | null>>({});
   const sourceCache = useRef<Record<string, { html: string }>>({});
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const terminalTheme = useMemo(
+    () => ({
+      background: colors.terminalBackground,
+      foreground: colors.terminalForeground,
+      cursor: colors.terminalForeground,
+    }),
+    [colors]
+  );
   const previousSessionRef = useRef<string | null>(null);
 
   const { data: sessions = [] } = useQuery({
@@ -297,12 +312,10 @@ export default function SessionTerminalScreen() {
   useMemo(() => {
     if (!host) return;
     sessions.forEach((s) => {
-      if (!sourceCache.current[s.name]) {
-        const url = buildWsUrl(host, s.name);
-        if (url) sourceCache.current[s.name] = { html: buildTerminalHtml(url) };
-      }
+      const url = buildWsUrl(host, s.name);
+      if (url) sourceCache.current[s.name] = { html: buildTerminalHtml(url, terminalTheme) };
     });
-  }, [sessions, host]);
+  }, [sessions, host, terminalTheme]);
 
   // Keyboard handling
   useEffect(() => {
@@ -440,7 +453,7 @@ export default function SessionTerminalScreen() {
               copyFromTerminal();
             }}
           >
-            <Copy size={16} color="#E6EDF3" />
+            <Copy size={16} color={colors.terminalForeground} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}
@@ -449,7 +462,7 @@ export default function SessionTerminalScreen() {
               sendToTerminal('\u0003');
             }}
           >
-            <OctagonX size={16} color="#F85149" />
+            <OctagonX size={16} color={colors.red} />
           </Pressable>
         </View>
       </View>
@@ -513,7 +526,7 @@ export default function SessionTerminalScreen() {
                 style={({ pressed }) => [styles.doneKey, pressed && styles.keyPressed]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); blurTerminal(); }}
               >
-                <ChevronDown size={16} color="#E6EDF3" />
+                <ChevronDown size={16} color={colors.terminalForeground} />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
@@ -523,7 +536,7 @@ export default function SessionTerminalScreen() {
                   if (text) sendToTerminal(text);
                 }}
               >
-                <ClipboardPaste size={16} color="#E6EDF3" />
+                <ClipboardPaste size={16} color={colors.terminalForeground} />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
@@ -547,7 +560,7 @@ export default function SessionTerminalScreen() {
                   }
                 }}
               >
-                <ImageIcon size={16} color="#E6EDF3" />
+                <ImageIcon size={16} color={colors.terminalForeground} />
               </Pressable>
               {helperKeys.map((item) => (
                 <Pressable
@@ -555,7 +568,7 @@ export default function SessionTerminalScreen() {
                   style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); sendToTerminal(item.data); }}
                 >
-                  {item.icon ? <item.icon size={16} color="#E6EDF3" /> : <AppText variant="caps" style={styles.helperText}>{item.label}</AppText>}
+                  {item.icon ? <item.icon size={16} color={colors.terminalForeground} /> : <AppText variant="caps" style={styles.helperText}>{item.label}</AppText>}
                 </Pressable>
               ))}
             </ScrollView>
@@ -566,7 +579,16 @@ export default function SessionTerminalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     position: 'absolute',
     top: 0,
@@ -577,7 +599,7 @@ const styles = StyleSheet.create({
   },
   headerFloating: {
     flexDirection: 'row',
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     padding: 4,
@@ -588,10 +610,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   headerButtonPressed: {
-    backgroundColor: '#1E2226',
+    backgroundColor: colors.terminalPressed,
   },
   headerButtonText: {
-    color: '#8B949E',
+    color: colors.terminalMuted,
     fontSize: 16,
   },
   pager: {
@@ -603,7 +625,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '100%',
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
   },
   pageLabel: {
     position: 'absolute',
@@ -614,8 +636,8 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   pageLabelText: {
-    color: '#8B949E',
-    backgroundColor: 'rgba(11, 13, 15, 0.8)',
+    color: colors.terminalMuted,
+    backgroundColor: withAlpha(colors.terminalBackground, 0.8),
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -623,11 +645,11 @@ const styles = StyleSheet.create({
   },
   terminal: {
     flex: 1,
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
   },
   webview: {
     flex: 1,
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
   },
   helperOverlay: {
     position: 'absolute',
@@ -635,9 +657,9 @@ const styles = StyleSheet.create({
     right: 0,
   },
   helperBar: {
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
     borderTopWidth: 1,
-    borderTopColor: '#1E2226',
+    borderTopColor: colors.terminalBorder,
     paddingVertical: 8,
   },
   helperContent: {
@@ -648,20 +670,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    backgroundColor: '#111315',
+    backgroundColor: colors.terminalPressed,
     borderWidth: 1,
-    borderColor: '#1E2226',
+    borderColor: colors.terminalBorder,
   },
   helperText: {
-    color: '#E6EDF3',
+    color: colors.terminalForeground,
   },
   doneKey: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    backgroundColor: '#1E2226',
+    backgroundColor: colors.terminalBorder,
   },
   keyPressed: {
-    backgroundColor: '#2D3339',
+    backgroundColor: colors.cardPressed,
   },
 });

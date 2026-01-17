@@ -1,38 +1,30 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Host, HostDraft, Keybind } from '@/lib/types';
-import { loadHosts, loadKeybinds, saveHosts, saveKeybinds } from '@/lib/storage';
-import { createId, defaultKeybinds, pickHostAccent } from '@/lib/defaults';
+import { AppPreferences, Host, HostDraft, UsageCardsVisibility } from '@/lib/types';
+import { loadHosts, loadPreferences, saveHosts, savePreferences } from '@/lib/storage';
+import { createId, defaultPreferences, pickHostAccent } from '@/lib/defaults';
 
 const StoreContext = createContext<{
   hosts: Host[];
-  keybinds: Keybind[];
+  preferences: AppPreferences;
   ready: boolean;
   upsertHost: (host: HostDraft, id?: string) => Promise<Host>;
   removeHost: (id: string) => Promise<void>;
   updateHostLastSeen: (id: string, timestamp: number) => void;
-  addKeybind: (label: string, keys: string[]) => Promise<void>;
-  updateKeybind: (id: string, updates: Partial<Keybind>) => Promise<void>;
-  removeKeybind: (id: string) => Promise<void>;
+  updateUsageCardVisibility: (updates: Partial<UsageCardsVisibility>) => void;
 } | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [hosts, setHosts] = useState<Host[]>([]);
-  const [keybinds, setKeybinds] = useState<Keybind[]>([]);
+  const [preferences, setPreferences] = useState<AppPreferences>(defaultPreferences());
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     async function load() {
-      const [storedHosts, storedKeybinds] = await Promise.all([loadHosts(), loadKeybinds()]);
+      const [storedHosts, storedPreferences] = await Promise.all([loadHosts(), loadPreferences()]);
       if (!mounted) return;
       setHosts(storedHosts);
-      if (storedKeybinds.length === 0) {
-        const defaults = defaultKeybinds();
-        setKeybinds(defaults);
-        await saveKeybinds(defaults);
-      } else {
-        setKeybinds(storedKeybinds);
-      }
+      setPreferences(storedPreferences);
       setReady(true);
     }
 
@@ -45,11 +37,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const persistHosts = useCallback(async (nextHosts: Host[]) => {
     setHosts(nextHosts);
     await saveHosts(nextHosts);
-  }, []);
-
-  const persistKeybinds = useCallback(async (nextKeybinds: Keybind[]) => {
-    setKeybinds(nextKeybinds);
-    await saveKeybinds(nextKeybinds);
   }, []);
 
   const upsertHost = useCallback(
@@ -92,54 +79,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const addKeybind = useCallback(
-    async (label: string, keys: string[]) => {
-      const nextKeybinds = [...keybinds, { id: createId('kb'), label, keys }];
-      await persistKeybinds(nextKeybinds);
+  const updateUsageCardVisibility = useCallback(
+    (updates: Partial<UsageCardsVisibility>) => {
+      setPreferences((prev) => {
+        const next: AppPreferences = {
+          ...prev,
+          usageCards: { ...prev.usageCards, ...updates },
+        };
+        savePreferences(next);
+        return next;
+      });
     },
-    [keybinds, persistKeybinds]
-  );
-
-  const updateKeybind = useCallback(
-    async (id: string, updates: Partial<Keybind>) => {
-      const nextKeybinds = keybinds.map((keybind) =>
-        keybind.id === id ? { ...keybind, ...updates } : keybind
-      );
-      await persistKeybinds(nextKeybinds);
-    },
-    [keybinds, persistKeybinds]
-  );
-
-  const removeKeybind = useCallback(
-    async (id: string) => {
-      const nextKeybinds = keybinds.filter((keybind) => keybind.id !== id);
-      await persistKeybinds(nextKeybinds);
-    },
-    [keybinds, persistKeybinds]
+    []
   );
 
   const value = useMemo(
     () => ({
       hosts,
-      keybinds,
+      preferences,
       ready,
       upsertHost,
       removeHost,
       updateHostLastSeen,
-      addKeybind,
-      updateKeybind,
-      removeKeybind,
+      updateUsageCardVisibility,
     }),
     [
       hosts,
-      keybinds,
+      preferences,
       ready,
       upsertHost,
       removeHost,
       updateHostLastSeen,
-      addKeybind,
-      updateKeybind,
-      removeKeybind,
+      updateUsageCardVisibility,
     ]
   );
 

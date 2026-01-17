@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Host, Keybind } from '@/lib/types';
+import { AppPreferences, Host } from '@/lib/types';
+import { defaultPreferences } from '@/lib/defaults';
 
 const HOSTS_KEY = 'tmux.hosts.v1';
-const KEYBINDS_KEY = 'tmux.keybinds.v1';
+const PREFERENCES_KEY = 'tmux.preferences.v1';
 
 export async function loadHosts(): Promise<Host[]> {
   const raw = await AsyncStorage.getItem(HOSTS_KEY);
@@ -18,16 +19,31 @@ export async function saveHosts(hosts: Host[]): Promise<void> {
   await AsyncStorage.setItem(HOSTS_KEY, JSON.stringify(hosts));
 }
 
-export async function loadKeybinds(): Promise<Keybind[]> {
-  const raw = await AsyncStorage.getItem(KEYBINDS_KEY);
-  if (!raw) return [];
+function normalizePreferences(raw: Partial<AppPreferences> | null): AppPreferences {
+  const defaults = defaultPreferences();
+  const usageCards: Partial<AppPreferences['usageCards']> = raw?.usageCards ?? {};
+
+  return {
+    usageCards: {
+      claude: typeof usageCards.claude === 'boolean' ? usageCards.claude : defaults.usageCards.claude,
+      codex: typeof usageCards.codex === 'boolean' ? usageCards.codex : defaults.usageCards.codex,
+      copilot:
+        typeof usageCards.copilot === 'boolean' ? usageCards.copilot : defaults.usageCards.copilot,
+    },
+  };
+}
+
+export async function loadPreferences(): Promise<AppPreferences> {
+  const raw = await AsyncStorage.getItem(PREFERENCES_KEY);
+  if (!raw) return defaultPreferences();
   try {
-    return JSON.parse(raw) as Keybind[];
+    const parsed = JSON.parse(raw) as Partial<AppPreferences>;
+    return normalizePreferences(parsed);
   } catch {
-    return [];
+    return defaultPreferences();
   }
 }
 
-export async function saveKeybinds(keybinds: Keybind[]): Promise<void> {
-  await AsyncStorage.setItem(KEYBINDS_KEY, JSON.stringify(keybinds));
+export async function savePreferences(preferences: AppPreferences): Promise<void> {
+  await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
 }

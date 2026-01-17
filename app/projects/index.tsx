@@ -13,11 +13,13 @@ import { FadeIn } from '@/components/FadeIn';
 import { Card } from '@/components/Card';
 import { useStore } from '@/lib/store';
 import { useProjects } from '@/lib/projects-store';
-import { palette, theme, hostAccents } from '@/lib/theme';
-import { systemColors } from '@/lib/colors';
+import { theme } from '@/lib/theme';
+import { hostColors } from '@/lib/colors';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export default function ProjectsScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { hosts } = useStore();
   const { projects } = useProjects();
 
@@ -29,6 +31,8 @@ export default function ProjectsScreen() {
     });
     return grouped;
   }, [projects]);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <Screen>
@@ -74,7 +78,7 @@ export default function ProjectsScreen() {
                     <View
                       style={[
                         styles.hostDot,
-                        { backgroundColor: host.color || hostAccents[hostIdx % hostAccents.length] },
+                        { backgroundColor: host.color || hostColors[hostIdx % hostColors.length] },
                       ]}
                     />
                     <AppText variant="caps" style={styles.hostName}>
@@ -120,7 +124,7 @@ export default function ProjectsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -131,12 +135,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontSize: 20,
     marginTop: -2,
   },
@@ -145,7 +149,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
   },
   empty: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.lg,
     alignItems: 'center',
@@ -155,13 +159,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.sm,
   },
   emptyIconText: {
-    color: palette.muted,
+    color: colors.textSecondary,
   },
   emptyBody: {
     textAlign: 'center',
@@ -169,13 +173,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   cta: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   hostGroup: {
     gap: theme.spacing.sm,
@@ -192,14 +196,14 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   hostName: {
-    color: palette.ink,
+    color: colors.text,
     fontWeight: '600',
   },
   hostBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
   },
   hostCount: {
     fontSize: 10,

@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, TextInput, StyleSheet, TextInputProps } from 'react-native';
 import { AppText } from '@/components/AppText';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <AppText variant="label" style={styles.label}>
@@ -11,14 +15,14 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
       </AppText>
       <TextInput
         {...props}
-        placeholderTextColor={palette.muted}
+        placeholderTextColor={colors.textMuted}
         style={[styles.input, props.style]}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginBottom: theme.spacing.sm,
   },
@@ -27,13 +31,13 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
     fontFamily: 'SpaceGrotesk_400Regular',
-    color: palette.ink,
+    color: colors.text,
   },
 });

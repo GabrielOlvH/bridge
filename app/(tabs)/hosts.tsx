@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { Alert, View, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Screen } from '@/components/Screen';
@@ -7,17 +7,22 @@ import { AppText } from '@/components/AppText';
 import { FadeIn } from '@/components/FadeIn';
 import { HostCard } from '@/components/HostCard';
 import { SkeletonList } from '@/components/Skeleton';
+import { applyUpdate, checkForUpdate, UpdateStatus } from '@/lib/api';
 import { systemColors } from '@/lib/colors';
 import { useStore } from '@/lib/store';
 import { useHostsLive } from '@/lib/live';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 type CardStatus = 'online' | 'offline' | 'checking';
 
 export default function HostsTabScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { hosts, updateHostLastSeen } = useStore();
   const [manualRefresh, setManualRefresh] = useState(false);
+  const [updateStatusMap, setUpdateStatusMap] = useState<Record<string, UpdateStatus>>({});
+  const [updatingHosts, setUpdatingHosts] = useState<Record<string, boolean>>({});
 
   const { stateMap, refreshAll } = useHostsLive(hosts, { sessions: true, docker: true });
 
@@ -39,6 +44,11 @@ export default function HostsTabScreen() {
   const onlineCount = useMemo(
     () => Object.values(statusMap).filter((s) => s === 'online').length,
     [statusMap]
+  );
+
+  const onlineHosts = useMemo(
+    () => hosts.filter((host) => statusMap[host.id] === 'online'),
+    [hosts, statusMap]
   );
 
   const isInitialLoading = useMemo(
@@ -77,6 +87,62 @@ export default function HostsTabScreen() {
     },
     [router]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (onlineHosts.length === 0) {
+      setUpdateStatusMap({});
+      return;
+    }
+
+    const checkUpdates = async () => {
+      const next: Record<string, UpdateStatus> = {};
+      await Promise.all(
+        onlineHosts.map(async (host) => {
+          try {
+            const status = await checkForUpdate(host);
+            if (status.updateAvailable) {
+              next[host.id] = status;
+            }
+          } catch {
+            // Ignore errors, host might not support updates
+          }
+        })
+      );
+      if (!cancelled) setUpdateStatusMap(next);
+    };
+
+    checkUpdates();
+    const interval = setInterval(checkUpdates, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [onlineHosts]);
+
+  const handleUpdate = useCallback(
+    async (hostId: string) => {
+      const host = hosts.find((item) => item.id === hostId);
+      if (!host || updatingHosts[hostId]) return;
+      setUpdatingHosts((prev) => ({ ...prev, [hostId]: true }));
+      try {
+        await applyUpdate(host);
+        Alert.alert('Update Started', 'The agent is updating and will restart.');
+        setUpdateStatusMap((prev) => {
+          const next = { ...prev };
+          delete next[hostId];
+          return next;
+        });
+      } catch (err) {
+        Alert.alert('Update Failed', err instanceof Error ? err.message : 'Could not apply update');
+      } finally {
+        setUpdatingHosts((prev) => ({ ...prev, [hostId]: false }));
+      }
+    },
+    [hosts, updatingHosts]
+  );
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <Screen>
@@ -135,6 +201,9 @@ export default function HostsTabScreen() {
                 status={statusMap[host.id]}
                 sessionCount={sessionCounts[host.id]}
                 containerCount={containerCounts[host.id] || undefined}
+                updateStatus={updateStatusMap[host.id]}
+                isUpdating={Boolean(updatingHosts[host.id])}
+                onUpdate={() => handleUpdate(host.id)}
                 onPress={() => router.push(`/hosts/${host.id}`)}
                 onTerminal={() => handleTerminal(host.id)}
                 onDocker={() => handleDocker(host.id)}
@@ -147,7 +216,7 @@ export default function HostsTabScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -158,12 +227,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontSize: 20,
     marginTop: -2,
   },
@@ -172,7 +241,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   empty: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.lg,
     alignItems: 'center',
@@ -182,13 +251,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.sm,
   },
   emptyIconText: {
-    color: palette.muted,
+    color: colors.textSecondary,
   },
   emptyBody: {
     textAlign: 'center',
@@ -196,12 +265,12 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   cta: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
 });

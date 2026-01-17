@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, ViewStyle } from 'react-native';
+import { StyleSheet, type ColorValue, ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -8,9 +8,10 @@ import Animated, {
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
+import { statusColors } from '@/lib/colors';
 
 type PulsingDotProps = {
-  color: string;
+  color: ColorValue;
   active?: boolean;
   size?: number;
   style?: ViewStyle;
@@ -73,22 +74,22 @@ type StatusDotProps = {
   size?: number;
   style?: ViewStyle;
   colors?: {
-    online?: string;
-    offline?: string;
-    checking?: string;
-    running?: string;
-    idle?: string;
-    stopped?: string;
+    online?: ColorValue;
+    offline?: ColorValue;
+    checking?: ColorValue;
+    running?: ColorValue;
+    idle?: ColorValue;
+    stopped?: ColorValue;
   };
 };
 
 const defaultStatusColors = {
-  online: '#34C759',
-  running: '#34C759',
-  offline: '#FF3B30',
-  stopped: '#8E8E93',
-  checking: '#FF9500',
-  idle: '#FF9500',
+  online: statusColors.online,
+  running: statusColors.running,
+  offline: statusColors.offline,
+  stopped: statusColors.stopped,
+  checking: statusColors.warning,
+  idle: statusColors.idle,
 };
 
 export function StatusDot({

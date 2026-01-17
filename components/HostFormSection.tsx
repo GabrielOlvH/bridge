@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { AppText } from '@/components/AppText';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export function HostConnectionSelector({
   value,
@@ -10,6 +11,9 @@ export function HostConnectionSelector({
   value: 'ssh' | 'mosh';
   onChange: (value: 'ssh' | 'mosh') => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.segment}>
       <AppText variant="label" style={styles.segmentLabel}>
@@ -37,7 +41,7 @@ export function HostConnectionSelector({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   segment: {
     marginBottom: theme.spacing.sm,
   },
@@ -53,18 +57,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: theme.radii.md,
     borderWidth: 1,
-    borderColor: palette.line,
+    borderColor: colors.border,
     alignItems: 'center',
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
   },
   segmentActive: {
-    backgroundColor: palette.accent,
-    borderColor: palette.accentStrong,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   segmentText: {
-    color: palette.muted,
+    color: colors.textMuted,
   },
   segmentActiveText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
 });

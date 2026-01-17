@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "typecheck:agent": "cd agent && tsc --noEmit",
+    "typecheck:all": "npm run typecheck && npm run typecheck:agent",
     "lint": "npx oxlint@latest .",
     "lint:fix": "npx oxlint@latest . --fix"
   },

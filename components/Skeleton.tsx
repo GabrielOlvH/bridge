@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -9,7 +9,8 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { cardShadow, useTheme } from '@/lib/useTheme';
 
 type SkeletonProps = {
   width?: number | string;
@@ -18,12 +19,138 @@ type SkeletonProps = {
   style?: ViewStyle;
 };
 
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function createStyles(colors: { card: string; cardPressed: string }) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: colors.cardPressed,
+      overflow: 'hidden',
+    },
+    shimmer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 200,
+    },
+    gradient: {
+      flex: 1,
+      width: 200,
+    },
+    list: {
+      gap: theme.spacing.sm,
+    },
+    sessionCard: {
+      backgroundColor: colors.card,
+      borderRadius: theme.radii.lg,
+      padding: 14,
+    },
+    sessionCardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    sessionCardContent: {
+      flex: 1,
+      gap: 6,
+    },
+    sessionCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    sessionCardSubtitle: {
+      marginTop: 2,
+    },
+    hostCard: {
+      backgroundColor: colors.card,
+      borderRadius: theme.radii.lg,
+      padding: 16,
+      gap: 14,
+    },
+    hostCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    hostCardTitleWrap: {
+      flex: 1,
+      gap: 4,
+    },
+    hostCardHostname: {
+      marginTop: 2,
+    },
+    hostCardStats: {
+      flexDirection: 'row',
+      gap: 24,
+    },
+    hostCardStat: {
+      gap: 4,
+    },
+    hostCardStatValue: {
+      marginTop: 2,
+    },
+    hostCardActions: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 4,
+    },
+    containerCard: {
+      backgroundColor: colors.card,
+      borderRadius: theme.radii.lg,
+      padding: 14,
+      gap: 12,
+    },
+    containerCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    containerCardInfo: {
+      flex: 1,
+      gap: 6,
+    },
+    containerCardMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    containerCardStats: {
+      flexDirection: 'row',
+      gap: 20,
+    },
+    containerCardStat: {
+      gap: 4,
+    },
+    containerCardActions: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+  });
+}
+
+function useSkeletonStyles() {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return { colors, isDark, styles };
+}
+
 export function Skeleton({
   width = '100%',
   height = 16,
   borderRadius = 8,
   style,
 }: SkeletonProps) {
+  const { colors, isDark, styles } = useSkeletonStyles();
   const shimmerPosition = useSharedValue(0);
 
   useEffect(() => {
@@ -49,6 +176,8 @@ export function Skeleton({
     ],
   }));
 
+  const shimmerColor = withAlpha(colors.text, isDark ? 0.2 : 0.12);
+
   return (
     <View
       style={[
@@ -65,7 +194,7 @@ export function Skeleton({
         <LinearGradient
           colors={[
             'transparent',
-            'rgba(255, 255, 255, 0.3)',
+            shimmerColor,
             'transparent',
           ]}
           start={{ x: 0, y: 0.5 }}
@@ -82,8 +211,10 @@ type SkeletonCardProps = {
 };
 
 export function SkeletonSessionCard({ style }: SkeletonCardProps) {
+  const { isDark, styles } = useSkeletonStyles();
+
   return (
-    <View style={[styles.sessionCard, style]}>
+    <View style={[styles.sessionCard, isDark ? cardShadow.dark : cardShadow.light, style]}>
       <View style={styles.sessionCardRow}>
         <Skeleton width={4} height={36} borderRadius={2} />
         <View style={styles.sessionCardContent}>
@@ -99,8 +230,10 @@ export function SkeletonSessionCard({ style }: SkeletonCardProps) {
 }
 
 export function SkeletonHostCard({ style }: SkeletonCardProps) {
+  const { isDark, styles } = useSkeletonStyles();
+
   return (
-    <View style={[styles.hostCard, style]}>
+    <View style={[styles.hostCard, isDark ? cardShadow.dark : cardShadow.light, style]}>
       <View style={styles.hostCardHeader}>
         <Skeleton width={12} height={12} borderRadius={6} />
         <View style={styles.hostCardTitleWrap}>
@@ -128,8 +261,10 @@ export function SkeletonHostCard({ style }: SkeletonCardProps) {
 }
 
 export function SkeletonContainerCard({ style }: SkeletonCardProps) {
+  const { isDark, styles } = useSkeletonStyles();
+
   return (
-    <View style={[styles.containerCard, style]}>
+    <View style={[styles.containerCard, isDark ? cardShadow.dark : cardShadow.light, style]}>
       <View style={styles.containerCardHeader}>
         <Skeleton width={8} height={8} borderRadius={4} />
         <View style={styles.containerCardInfo}>
@@ -165,6 +300,7 @@ type SkeletonListProps = {
 };
 
 export function SkeletonList({ count = 3, type, style }: SkeletonListProps) {
+  const { styles } = useSkeletonStyles();
   const CardComponent =
     type === 'session'
       ? SkeletonSessionCard
@@ -180,114 +316,3 @@ export function SkeletonList({ count = 3, type, style }: SkeletonListProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: palette.surfaceAlt,
-    overflow: 'hidden',
-  },
-  shimmer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: 200,
-  },
-  gradient: {
-    flex: 1,
-    width: 200,
-  },
-  list: {
-    gap: theme.spacing.sm,
-  },
-  sessionCard: {
-    backgroundColor: palette.surface,
-    borderRadius: theme.radii.lg,
-    padding: 14,
-    ...theme.shadow.card,
-  },
-  sessionCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sessionCardContent: {
-    flex: 1,
-    gap: 6,
-  },
-  sessionCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sessionCardSubtitle: {
-    marginTop: 2,
-  },
-  hostCard: {
-    backgroundColor: palette.surface,
-    borderRadius: theme.radii.lg,
-    padding: 16,
-    gap: 14,
-    ...theme.shadow.card,
-  },
-  hostCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  hostCardTitleWrap: {
-    flex: 1,
-    gap: 4,
-  },
-  hostCardHostname: {
-    marginTop: 2,
-  },
-  hostCardStats: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  hostCardStat: {
-    gap: 4,
-  },
-  hostCardStatValue: {
-    marginTop: 2,
-  },
-  hostCardActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
-  containerCard: {
-    backgroundColor: palette.surface,
-    borderRadius: theme.radii.lg,
-    padding: 14,
-    gap: 12,
-    ...theme.shadow.card,
-  },
-  containerCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  containerCardInfo: {
-    flex: 1,
-    gap: 6,
-  },
-  containerCardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  containerCardStats: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  containerCardStat: {
-    gap: 4,
-  },
-  containerCardActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-});

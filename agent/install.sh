@@ -188,7 +188,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$INSTALL_DIR/agent
-ExecStart=$(which node) $INSTALL_DIR/agent/node_modules/.bin/tsx $INSTALL_DIR/agent/index.ts
+ExecStart=$(which node) $INSTALL_DIR/agent/node_modules/.bin/tsx $INSTALL_DIR/agent/src/index.ts
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -222,7 +222,7 @@ setup_openrc() {
 name="bridge-agent"
 description="Bridge Agent - Terminal Management Server"
 command="$(which node)"
-command_args="$INSTALL_DIR/agent/node_modules/.bin/tsx $INSTALL_DIR/agent/index.ts"
+command_args="$INSTALL_DIR/agent/node_modules/.bin/tsx $INSTALL_DIR/agent/src/index.ts"
 command_background=true
 pidfile="/run/\${RC_SVCNAME}.pid"
 directory="$INSTALL_DIR/agent"
@@ -249,7 +249,7 @@ EOF
     # Start manually in background
     cd "$INSTALL_DIR/agent"
     export $(cat .env | grep -v '^#' | xargs)
-    nohup $(which node) node_modules/.bin/tsx index.ts > /tmp/bridge-agent.log 2>&1 &
+    nohup $(which node) node_modules/.bin/tsx src/index.ts > /tmp/bridge-agent.log 2>&1 &
     echo $! > /tmp/bridge-agent.pid
 
     echo -e "${GREEN}✓ Agent started (PID: $(cat /tmp/bridge-agent.pid))${NC}"
@@ -261,7 +261,7 @@ setup_manual() {
 
     cd "$INSTALL_DIR/agent"
     export $(cat .env | grep -v '^#' | xargs)
-    nohup $(which node) node_modules/.bin/tsx index.ts > /tmp/bridge-agent.log 2>&1 &
+    nohup $(which node) node_modules/.bin/tsx src/index.ts > /tmp/bridge-agent.log 2>&1 &
     echo $! > /tmp/bridge-agent.pid
 
     echo -e "${GREEN}✓ Agent started (PID: $(cat /tmp/bridge-agent.pid))${NC}"

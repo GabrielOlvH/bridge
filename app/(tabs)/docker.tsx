@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  type ColorValue,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Play, Square, Terminal } from 'lucide-react-native';
@@ -18,7 +19,7 @@ import { Card } from '@/components/Card';
 import { PulsingDot } from '@/components/PulsingDot';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SkeletonList } from '@/components/Skeleton';
-import { systemColors } from '@/lib/colors';
+import { hostColors, systemColors } from '@/lib/colors';
 import {
   useAllDocker,
   ContainerWithHost,
@@ -26,13 +27,15 @@ import {
   formatBytes,
 } from '@/lib/docker-hooks';
 import { dockerContainerAction } from '@/lib/api';
-import { palette, theme, hostAccents } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { Host } from '@/lib/types';
 
 type HostFilter = string | null;
 
 export default function DockerTabScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ hostId?: string }>();
   const {
     containers,
@@ -48,6 +51,8 @@ export default function DockerTabScreen() {
   const [manualRefresh, setManualRefresh] = useState(false);
   const [hostFilter, setHostFilter] = useState<HostFilter>(params.hostId ?? null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     if (params.hostId) {
@@ -118,7 +123,7 @@ export default function DockerTabScreen() {
   const renderHostChip = (host: Host, index: number) => {
     const isSelected = hostFilter === host.id;
     const containerCount = containers.filter((c) => c.host.id === host.id).length;
-    const chipColor = host.color || hostAccents[index % hostAccents.length];
+    const chipColor = host.color || hostColors[index % hostColors.length];
 
     return (
       <Pressable
@@ -147,7 +152,7 @@ export default function DockerTabScreen() {
   const renderContainer = (container: ContainerWithHost, index: number) => {
     const isRunning = isContainerRunning(container);
     const isActionLoading = actionInProgress === container.id;
-    const hostColor = container.host.color || palette.accent;
+    const hostColor = container.host.color || colors.accent;
 
     return (
       <FadeIn key={container.id} delay={index * 30}>
@@ -155,7 +160,7 @@ export default function DockerTabScreen() {
           <Card style={styles.containerCard}>
             <View style={styles.containerHeader}>
               <PulsingDot
-                color={isRunning ? palette.accent : palette.muted}
+                color={isRunning ? colors.accent : colors.textMuted}
                 active={isRunning}
                 size={8}
               />
@@ -164,7 +169,7 @@ export default function DockerTabScreen() {
                   {container.name}
                 </AppText>
                 <View style={styles.containerMeta}>
-                  <View style={[styles.hostBadge, { backgroundColor: hostColor + '20' }]}>
+                  <View style={[styles.hostBadge, { backgroundColor: withAlpha(hostColor, 0.12) }]}>
                     <View style={[styles.hostBadgeDot, { backgroundColor: hostColor }]} />
                     <AppText variant="caps" style={[styles.hostBadgeText, { color: hostColor }]}>
                       {container.host.name}
@@ -216,7 +221,7 @@ export default function DockerTabScreen() {
                 onPress={() => handleTerminal(container)}
                 disabled={isActionLoading}
               >
-                <Terminal size={16} color={palette.accent} />
+                <Terminal size={16} color={colors.accent} />
                 <AppText variant="caps" style={styles.actionButtonTextTerminal}>
                   Terminal
                 </AppText>
@@ -229,10 +234,10 @@ export default function DockerTabScreen() {
                   disabled={isActionLoading}
                 >
                   {isActionLoading ? (
-                    <ActivityIndicator size="small" color={palette.clay} />
+                    <ActivityIndicator size="small" color={colors.red} />
                   ) : (
                     <>
-                      <Square size={14} color={palette.clay} />
+                      <Square size={14} color={colors.red} />
                       <AppText variant="caps" style={styles.actionButtonTextStop}>
                         Stop
                       </AppText>
@@ -246,10 +251,10 @@ export default function DockerTabScreen() {
                   disabled={isActionLoading}
                 >
                   {isActionLoading ? (
-                    <ActivityIndicator size="small" color={palette.accent} />
+                    <ActivityIndicator size="small" color={colors.accent} />
                   ) : (
                     <>
-                      <Play size={14} color={palette.accent} />
+                      <Play size={14} color={colors.accent} />
                       <AppText variant="caps" style={styles.actionButtonTextStart}>
                         Start
                       </AppText>
@@ -374,7 +379,7 @@ export default function DockerTabScreen() {
               >
                 <AppText
                   variant="caps"
-                  style={[styles.hostChipText, !hostFilter && { color: palette.accent }]}
+                  style={[styles.hostChipText, !hostFilter && { color: colors.accent }]}
                 >
                   All Hosts
                 </AppText>
@@ -423,7 +428,20 @@ export default function DockerTabScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function withAlpha(color: ColorValue, alpha: number): ColorValue {
+  if (typeof color !== 'string') return color;
+  const trimmed = color.trim();
+  const hex = trimmed.startsWith('#') ? trimmed.slice(1) : '';
+  if (hex.length !== 3 && hex.length !== 6) return color;
+  const normalized = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  if ([r, g, b].some((value) => Number.isNaN(value))) return color;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   scrollContent: {
     paddingBottom: theme.spacing.xxl,
     gap: theme.spacing.sm,
@@ -446,7 +464,7 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 32,
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
   },
   hostFilters: {
     marginBottom: theme.spacing.xs,
@@ -462,13 +480,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
   hostChipSelected: {
-    backgroundColor: palette.surface,
-    borderColor: palette.accent,
+    backgroundColor: colors.card,
+    borderColor: colors.accent,
   },
   hostChipDot: {
     width: 8,
@@ -476,7 +494,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   hostChipText: {
-    color: palette.muted,
+    color: colors.textMuted,
   },
   hostChipCount: {
     fontSize: 10,
@@ -500,14 +518,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   statusRunning: {
-    backgroundColor: palette.accent,
-    shadowColor: palette.accent,
+    backgroundColor: colors.green,
+    shadowColor: colors.green,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
   },
   statusStopped: {
-    backgroundColor: palette.muted,
+    backgroundColor: colors.textMuted,
   },
   containerInfo: {
     flex: 1,
@@ -567,24 +585,24 @@ const styles = StyleSheet.create({
     minWidth: 90,
   },
   actionButtonTerminal: {
-    backgroundColor: palette.mint,
+    backgroundColor: withAlpha(colors.green, 0.12),
   },
   actionButtonStart: {
-    backgroundColor: palette.mint,
+    backgroundColor: withAlpha(colors.green, 0.12),
   },
   actionButtonStop: {
-    backgroundColor: palette.blush,
+    backgroundColor: withAlpha(colors.red, 0.12),
   },
   actionButtonTextTerminal: {
-    color: palette.accent,
+    color: colors.green,
     fontWeight: '600',
   },
   actionButtonTextStart: {
-    color: palette.accent,
+    color: colors.green,
     fontWeight: '600',
   },
   actionButtonTextStop: {
-    color: palette.clay,
+    color: colors.red,
     fontWeight: '600',
   },
   emptyCard: {
@@ -596,37 +614,37 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.xs,
   },
   emptyIcon: {
-    color: palette.muted,
+    color: colors.textSecondary,
   },
   emptyBody: {
     textAlign: 'center',
     maxWidth: 260,
   },
   cta: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 12,
     paddingHorizontal: 24,
     marginTop: theme.spacing.sm,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   ctaSecondary: {
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     borderRadius: theme.radii.md,
     paddingVertical: 10,
     paddingHorizontal: 20,
     marginTop: theme.spacing.sm,
   },
   ctaSecondaryText: {
-    color: palette.accent,
+    color: colors.accent,
   },
   loadingContainer: {
     flex: 1,
@@ -643,7 +661,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   clearFilter: {
-    color: palette.accent,
+    color: colors.accent,
     marginTop: theme.spacing.xs,
   },
 });

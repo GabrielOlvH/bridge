@@ -4,7 +4,8 @@ import { Field } from '@/components/Field';
 import { AppText } from '@/components/AppText';
 import { HostConnectionSelector } from '@/components/HostFormSection';
 import { HostDraft } from '@/lib/types';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export function HostForm({
   initial,
@@ -15,6 +16,8 @@ export function HostForm({
   onSubmit: (draft: HostDraft) => void;
   submitLabel?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [name, setName] = useState(initial?.name ?? '');
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '');
   const [authToken, setAuthToken] = useState(initial?.authToken ?? '');
@@ -98,7 +101,7 @@ export function HostForm({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   form: {
     paddingBottom: theme.spacing.lg,
   },
@@ -106,13 +109,13 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
     paddingVertical: 12,
     borderRadius: theme.radii.md,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
   },
   submitDisabled: {
-    backgroundColor: palette.surfaceSoft,
+    backgroundColor: colors.cardPressed,
   },
   submitText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
 });

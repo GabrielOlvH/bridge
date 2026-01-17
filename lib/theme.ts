@@ -6,19 +6,19 @@ import { systemColors, hostColors } from './colors';
  * Kept for backwards compatibility during migration.
  */
 export const palette = {
-  ink: '#1B1B1F',
-  muted: '#6E6A62',
-  line: '#E4DED5',
+  ink: '#1A1A1A',
+  muted: '#666666',
+  line: '#E5E5E5',
   surface: '#FFFFFF',
-  surfaceAlt: '#F6F1E8',
-  surfaceSoft: '#F2ECE2',
-  accent: '#2F6F66',
-  accentStrong: '#1F524B',
-  clay: '#C75B39',
-  blue: '#4F6FA9',
-  gold: '#D0A03A',
-  mint: '#CFE7DF',
-  blush: '#F4E2D6',
+  surfaceAlt: '#F5F5F5',
+  surfaceSoft: '#FAFAFA',
+  accent: '#1A1A1A',
+  accentStrong: '#000000',
+  clay: '#FF3B30',
+  blue: '#007AFF',
+  gold: '#FF9500',
+  mint: '#E8F5E9',
+  blush: '#FFF3E0',
 };
 
 /**
@@ -70,6 +70,6 @@ export const navTheme = {
     card: palette.surface,
     text: palette.ink,
     border: palette.line,
-    notification: palette.clay,
+    notification: palette.blue,
   },
 };

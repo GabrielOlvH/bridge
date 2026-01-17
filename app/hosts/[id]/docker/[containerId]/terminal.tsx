@@ -8,6 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { useStore } from '@/lib/store';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 
 function buildDockerWsUrl(host: { baseUrl: string; authToken?: string }, containerId: string): string {
@@ -26,7 +27,11 @@ function buildDockerWsUrl(host: { baseUrl: string; authToken?: string }, contain
   }
 }
 
-function buildTerminalHtml(wsUrl: string): string {
+function buildTerminalHtml(
+  wsUrl: string,
+  theme: { background: string; foreground: string; cursor: string }
+): string {
+  const { background, foreground, cursor } = theme;
   return `<!doctype html>
 <html>
   <head>
@@ -34,7 +39,7 @@ function buildTerminalHtml(wsUrl: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="https://unpkg.com/xterm/css/xterm.css" />
     <style>
-      html, body { height: 100%; margin: 0; background: #0B0D0F; overflow: hidden; }
+      html, body { height: 100%; margin: 0; background: ${background}; overflow: hidden; }
       #terminal { height: 100%; width: 100%; padding-left: 4px; }
     </style>
   </head>
@@ -49,7 +54,7 @@ function buildTerminalHtml(wsUrl: string): string {
         fontFamily: 'JetBrainsMono, Menlo, monospace',
         fontSize: 12,
         allowProposedApi: true,
-        theme: { background: '#0B0D0F', foreground: '#E6EDF3', cursor: '#E6EDF3' },
+        theme: { background: '${background}', foreground: '${foreground}', cursor: '${cursor}' },
       });
       const fitAddon = new FitAddon.FitAddon();
       const webglAddon = new WebglAddon.WebglAddon();
@@ -186,14 +191,24 @@ function buildTerminalHtml(wsUrl: string): string {
 
 export default function DockerTerminalScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ id: string; containerId: string }>();
   const { hosts } = useStore();
   const host = hosts.find((item) => item.id === params.id);
   const containerId = params.containerId ? decodeURIComponent(params.containerId) : '';
 
   const wsUrl = useMemo(() => (host && containerId ? buildDockerWsUrl(host, containerId) : ''), [host, containerId]);
-  const source = useMemo(() => ({ html: buildTerminalHtml(wsUrl) }), [wsUrl]);
+  const terminalTheme = useMemo(
+    () => ({
+      background: colors.terminalBackground,
+      foreground: colors.terminalForeground,
+      cursor: colors.terminalForeground,
+    }),
+    [colors]
+  );
+  const source = useMemo(() => ({ html: buildTerminalHtml(wsUrl, terminalTheme) }), [wsUrl, terminalTheme]);
   const webRef = useRef<WebView | null>(null);
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const copyFromTerminal = useCallback(() => {
     webRef.current?.injectJavaScript('window.__copySelection && window.__copySelection(); true;');
@@ -224,7 +239,7 @@ export default function DockerTerminalScreen() {
               copyFromTerminal();
             }}
           >
-            <Copy size={16} color="#E6EDF3" />
+            <Copy size={16} color={colors.terminalForeground} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}
@@ -233,7 +248,7 @@ export default function DockerTerminalScreen() {
               webRef.current?.injectJavaScript('window.__sendCtrlC && window.__sendCtrlC(); true;');
             }}
           >
-            <OctagonX size={16} color="#F85149" />
+            <OctagonX size={16} color={colors.red} />
           </Pressable>
         </View>
       </View>
@@ -272,7 +287,7 @@ export default function DockerTerminalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     position: 'absolute',
     top: 0,
@@ -283,7 +298,7 @@ const styles = StyleSheet.create({
   },
   headerFloating: {
     flexDirection: 'row',
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     padding: 4,
@@ -294,19 +309,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   headerButtonPressed: {
-    backgroundColor: '#1E2226',
+    backgroundColor: colors.terminalPressed,
   },
   headerButtonText: {
-    color: '#8B949E',
+    color: colors.terminalMuted,
     fontSize: 16,
   },
   terminal: {
     flex: 1,
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
     paddingTop: 4,
   },
   webview: {
     flex: 1,
-    backgroundColor: '#0B0D0F',
+    backgroundColor: colors.terminalBackground,
   },
 });

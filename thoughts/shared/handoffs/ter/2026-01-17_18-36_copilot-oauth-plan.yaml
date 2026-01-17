@@ -1,0 +1,56 @@
+---
+session: ter
+date: 2026-01-17
+status: complete
+outcome: SUCCEEDED
+---
+
+goal: Plan Copilot OAuth device flow authentication + usage display
+now: Implement plan at thoughts/shared/plans/PLAN-copilot-oauth-usage.md
+
+test: pnpm typecheck && pnpm lint
+
+done_this_session:
+  - task: Researched CodexBar reference implementation for OAuth device flow
+    files: [/tmp/CodexBar/Sources/CodexBarCore/Providers/Copilot/CopilotDeviceFlow.swift]
+  - task: Analyzed existing ter Copilot integration (token resolution, usage fetching)
+    files: [agent/copilot.ts, agent/usage.ts, agent/server.ts]
+  - task: Created implementation plan for Copilot OAuth + UI
+    files: [thoughts/shared/plans/PLAN-copilot-oauth-usage.md]
+  - task: Updated plan to remove legacy token methods per user request
+    files: [thoughts/shared/plans/PLAN-copilot-oauth-usage.md]
+
+blockers: []
+
+questions:
+  - Should usage display be in SessionCard or only in settings?
+
+decisions:
+  - oauth_client_id: Using VS Code's public client ID (Iv1.b507a08c87ecfe98) - widely used by third-party tools
+  - token_storage: File-based at ~/.ter/copilot-token (simple, works with agent architecture)
+  - remove_legacy: Removing all fallback token methods (env vars, config files, gh CLI) as they don't work
+
+findings:
+  - codexbar_pattern: Uses identical OAuth device flow (RFC 8628) with VS Code client ID
+  - existing_integration: agent/copilot.ts already has usage fetching, just needs working auth
+  - types_ready: ProviderUsage and SessionInsights already include copilot fields
+
+worked:
+  - Using CodexBar as reference implementation
+  - Scout agents for parallel codebase exploration
+
+failed: []
+
+next:
+  - Run /implement_plan thoughts/shared/plans/PLAN-copilot-oauth-usage.md
+  - Create agent/copilot-oauth.ts with device flow
+  - Remove legacy token methods from agent/copilot.ts
+  - Add OAuth endpoints to agent/server.ts
+  - Create app/copilot/auth.tsx UI screen
+  - Add Copilot section to app/(tabs)/more.tsx
+
+files:
+  created:
+    - thoughts/shared/plans/PLAN-copilot-oauth-usage.md
+    - thoughts/shared/handoffs/ter/plan-copilot-oauth-usage.md
+  modified: []

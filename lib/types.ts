@@ -1,3 +1,5 @@
+import type { ColorValue } from 'react-native';
+
 export type HostConnection = 'ssh' | 'mosh';
 
 export type Host = {
@@ -10,7 +12,7 @@ export type Host = {
   sshPort?: number;
   identityFile?: string;
   connection: HostConnection;
-  color?: string;
+  color?: ColorValue;
   lastSeen?: number;
 };
 
@@ -33,11 +35,14 @@ export type CursorInfo = {
   height: number;
 };
 
-export type Keybind = {
-  id: string;
-  label: string;
-  keys: string[];
-  color?: string;
+export type UsageCardsVisibility = {
+  claude: boolean;
+  codex: boolean;
+  copilot: boolean;
+};
+
+export type AppPreferences = {
+  usageCards: UsageCardsVisibility;
 };
 
 export type HostStatus = 'unknown' | 'checking' | 'online' | 'offline';

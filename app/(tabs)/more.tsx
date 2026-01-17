@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { ChevronRight } from 'lucide-react-native';
@@ -11,15 +11,18 @@ import type { ProviderUsage } from '@/lib/types';
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 interface MenuItemProps {
   title: string;
   subtitle?: string;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  chevronColor: string;
 }
 
-function MenuItem({ title, subtitle, onPress }: MenuItemProps) {
+function MenuItem({ title, subtitle, onPress, styles, chevronColor }: MenuItemProps) {
   return (
     <Pressable onPress={onPress} style={styles.menuItem}>
       <View style={styles.menuItemContent}>
@@ -30,14 +33,46 @@ function MenuItem({ title, subtitle, onPress }: MenuItemProps) {
           </AppText>
         )}
       </View>
-      <ChevronRight size={20} color={palette.muted} />
+      <ChevronRight size={20} color={chevronColor} />
     </Pressable>
+  );
+}
+
+interface ToggleItemProps {
+  title: string;
+  subtitle?: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  styles: ReturnType<typeof createStyles>;
+  colors: ThemeColors;
+}
+
+function ToggleItem({ title, subtitle, value, onValueChange, styles, colors }: ToggleItemProps) {
+  return (
+    <View style={styles.toggleItem}>
+      <View style={styles.menuItemContent}>
+        <AppText variant="subtitle">{title}</AppText>
+        {subtitle && (
+          <AppText variant="label" tone="muted">
+            {subtitle}
+          </AppText>
+        )}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: colors.separator, true: colors.accent }}
+        thumbColor={colors.card}
+        ios_backgroundColor={colors.separator}
+      />
+    </View>
   );
 }
 
 export default function MoreTabScreen() {
   const router = useRouter();
-  const { hosts } = useStore();
+  const { colors } = useTheme();
+  const { hosts, preferences, updateUsageCardVisibility } = useStore();
   const host = hosts[0];
 
   const [copilotLoading, setCopilotLoading] = useState(false);
@@ -100,6 +135,8 @@ export default function MoreTabScreen() {
     );
   };
 
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Screen>
       <ScrollView
@@ -111,18 +148,16 @@ export default function MoreTabScreen() {
             title="Projects"
             subtitle="Quick-launch commands and agents"
             onPress={() => router.push('/projects')}
+            styles={styles}
+            chevronColor={colors.textSecondary}
           />
           <View style={styles.separator} />
           <MenuItem
             title="Ports"
             subtitle="View and manage active ports"
             onPress={() => router.push('/ports')}
-          />
-          <View style={styles.separator} />
-          <MenuItem
-            title="Keybinds"
-            subtitle="Terminal keyboard shortcuts"
-            onPress={() => router.push('/keybinds')}
+            styles={styles}
+            chevronColor={colors.textSecondary}
           />
         </Card>
 
@@ -131,13 +166,13 @@ export default function MoreTabScreen() {
             <View style={styles.menuItemContent}>
               <AppText variant="subtitle">GitHub Copilot</AppText>
               {copilotLoading ? (
-                <ActivityIndicator size="small" color={palette.muted} />
+                <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : copilotAuthenticated ? (
                 <>
                   <AppText variant="label" tone="accent">Connected</AppText>
                   {copilotUsage && (
                     <AppText variant="label" tone="muted">
-                      Session: {copilotUsage.session?.percentLeft ?? '—'}% • Weekly: {copilotUsage.weekly?.percentLeft ?? '—'}%
+                      Premium: {copilotUsage.session?.percentLeft ?? '—'}% • Chat: {copilotUsage.weekly?.percentLeft ?? '—'}%
                     </AppText>
                   )}
                 </>
@@ -158,12 +193,50 @@ export default function MoreTabScreen() {
         </Card>
 
         <Card style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <AppText variant="subtitle">Main page usage</AppText>
+            <AppText variant="label" tone="muted">
+              Choose which provider cards appear on the Sessions tab.
+            </AppText>
+          </View>
+          <View style={styles.separator} />
+          <ToggleItem
+            title="Claude Code"
+            subtitle="No setup required"
+            value={preferences.usageCards.claude}
+            onValueChange={(value) => updateUsageCardVisibility({ claude: value })}
+            styles={styles}
+            colors={colors}
+          />
+          <View style={styles.separator} />
+          <ToggleItem
+            title="Codex"
+            subtitle="No setup required"
+            value={preferences.usageCards.codex}
+            onValueChange={(value) => updateUsageCardVisibility({ codex: value })}
+            styles={styles}
+            colors={colors}
+          />
+          <View style={styles.separator} />
+          <ToggleItem
+            title="GitHub Copilot"
+            subtitle="Show usage card"
+            value={preferences.usageCards.copilot}
+            onValueChange={(value) => updateUsageCardVisibility({ copilot: value })}
+            styles={styles}
+            colors={colors}
+          />
+        </Card>
+
+        <Card style={styles.card}>
           <MenuItem
             title="Settings"
             subtitle="App preferences"
             onPress={() => {
               // TODO: Navigate to settings when implemented
             }}
+            styles={styles}
+            chevronColor={colors.textSecondary}
           />
         </Card>
       </ScrollView>
@@ -171,7 +244,7 @@ export default function MoreTabScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   scrollContent: {
     paddingBottom: theme.spacing.xxl,
     gap: theme.spacing.md,
@@ -192,10 +265,20 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
     marginHorizontal: theme.spacing.md,
   },
+  sectionHeader: {
+    padding: theme.spacing.md,
+    gap: 2,
+  },
   copilotItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: theme.spacing.md,
+  },
+  toggleItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,7 +9,8 @@ import {
 import { AppText } from '@/components/AppText';
 import { fetchDirectoryListing } from '@/lib/api';
 import { DirectoryItem, Host } from '@/lib/types';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 type DirectoryBrowserProps = {
   host: Host;
@@ -18,6 +19,8 @@ type DirectoryBrowserProps = {
 };
 
 export function DirectoryBrowser({ host, onSelect, onClose }: DirectoryBrowserProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [items, setItems] = useState<DirectoryItem[]>([]);
@@ -80,7 +83,7 @@ export function DirectoryBrowser({ host, onSelect, onClose }: DirectoryBrowserPr
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={palette.accent} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -137,10 +140,10 @@ export function DirectoryBrowser({ host, onSelect, onClose }: DirectoryBrowserPr
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.surface,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -148,7 +151,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: palette.line,
+    borderBottomColor: colors.separator,
     marginBottom: theme.spacing.sm,
   },
   closeButton: {
@@ -161,7 +164,7 @@ const styles = StyleSheet.create({
   pathText: {
     fontFamily: 'JetBrainsMono_500Medium',
     fontSize: 12,
-    color: palette.muted,
+    color: colors.textMuted,
   },
   parentRow: {
     flexDirection: 'row',
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.xs,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     borderRadius: theme.radii.sm,
     marginBottom: theme.spacing.sm,
   },
@@ -191,13 +194,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   retryButton: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.radii.md,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   list: {
     flex: 1,
@@ -212,7 +215,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: palette.line,
+    borderBottomColor: colors.separator,
   },
   itemContent: {
     flex: 1,
@@ -221,28 +224,28 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   badge: {
-    backgroundColor: palette.mint,
+    backgroundColor: colors.barBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   badgeText: {
-    color: palette.accentStrong,
+    color: colors.accent,
     fontSize: 9,
   },
   selectButton: {
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 8,
     borderRadius: theme.radii.sm,
   },
   selectButtonHighlight: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
   },
   selectButtonText: {
-    color: palette.muted,
+    color: colors.textMuted,
   },
   selectButtonTextHighlight: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
 });

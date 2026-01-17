@@ -65,7 +65,6 @@ export default function RootLayout() {
                   <Stack.Screen name="projects/new" />
                   <Stack.Screen name="projects/[id]/commands" />
                   <Stack.Screen name="ports" />
-                  <Stack.Screen name="keybinds" />
                   <Stack.Screen name="session/[hostId]/[name]" />
                 </Stack>
                 <GlobalLaunchSheet />

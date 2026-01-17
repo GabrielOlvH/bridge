@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -12,8 +12,9 @@ import * as Clipboard from 'expo-clipboard';
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { useStore } from '@/lib/store';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { systemColors } from '@/lib/colors';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import {
   startCopilotAuth,
   pollCopilotAuth,
@@ -30,6 +31,7 @@ type AuthState =
 
 export default function CopilotAuthScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ hostId: string }>();
   const { hosts } = useStore();
   const host = hosts.find((h) => h.id === params.hostId);
@@ -138,6 +140,8 @@ export default function CopilotAuthScreen() {
     }
   }, []);
 
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   if (!host) {
     return (
       <Screen>
@@ -175,7 +179,7 @@ export default function CopilotAuthScreen() {
 
         {authState.status === 'loading' && (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={palette.accent} />
+            <ActivityIndicator size="large" color={colors.accent} />
             <AppText variant="body" tone="secondary" style={styles.loadingText}>
               Initiating authentication...
             </AppText>
@@ -209,7 +213,7 @@ export default function CopilotAuthScreen() {
 
             {authState.status === 'polling' && (
               <View style={styles.pollingIndicator}>
-                <ActivityIndicator size="small" color={palette.accent} />
+                <ActivityIndicator size="small" color={colors.accent} />
                 <AppText variant="body" tone="secondary" style={styles.pollingText}>
                   Waiting for authorization...
                 </AppText>
@@ -263,7 +267,7 @@ export default function CopilotAuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     marginBottom: theme.spacing.lg,
   },
@@ -288,7 +292,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   codeBox: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     paddingVertical: theme.spacing.lg,
     paddingHorizontal: theme.spacing.xl,
@@ -298,7 +302,7 @@ const styles = StyleSheet.create({
   userCode: {
     fontSize: 32,
     letterSpacing: 4,
-    color: palette.ink,
+    color: colors.text,
   },
   copyHint: {
     marginTop: theme.spacing.xs,
@@ -308,7 +312,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   button: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 12,
     paddingHorizontal: theme.spacing.lg,
@@ -316,7 +320,7 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   pollingIndicator: {
     flexDirection: 'row',
@@ -341,7 +345,7 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     fontSize: 32,
-    color: '#FFFFFF',
+    color: colors.text,
   },
   successText: {
     marginTop: theme.spacing.md,

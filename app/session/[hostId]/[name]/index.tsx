@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Alert,
   Pressable,
@@ -18,10 +18,12 @@ import { systemColors } from '@/lib/colors';
 import { buildAttachCommand, buildNewAttachCommand } from '@/lib/commands';
 import { useHostLive } from '@/lib/live';
 import { useStore } from '@/lib/store';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const params = useLocalSearchParams<{ hostId: string; name: string }>();
   const sessionName = decodeURIComponent(params.name ?? '');
   const { hosts, updateHostLastSeen } = useStore();
@@ -40,6 +42,8 @@ export default function SessionDetailScreen() {
   }, [host?.id, host?.lastSeen, state?.lastUpdate, updateHostLastSeen]);
 
   const isOnline = status === 'online';
+
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const attachCommand = host ? buildAttachCommand(host, sessionName) : '';
   const newAttachCommand = host ? buildNewAttachCommand(host, sessionName) : '';
@@ -102,7 +106,7 @@ export default function SessionDetailScreen() {
         <View style={styles.headerCenter}>
           <AppText variant="title" numberOfLines={1}>{sessionName}</AppText>
           <View style={styles.hostBadge}>
-            <View style={[styles.hostDot, { backgroundColor: host.color || palette.accent }]} />
+            <View style={[styles.hostDot, { backgroundColor: host.color || colors.accent }]} />
             <AppText variant="caps" tone="muted">{host.name}</AppText>
           </View>
         </View>
@@ -158,7 +162,7 @@ export default function SessionDetailScreen() {
                 value={rename}
                 onChangeText={setRename}
                 placeholder={sessionName}
-                placeholderTextColor={palette.muted}
+                placeholderTextColor={colors.textMuted}
                 style={styles.input}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -200,7 +204,10 @@ export default function SessionDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, isDark: boolean) => {
+  const actionTextColor = isDark ? colors.text : colors.accentText;
+
+  return StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -226,17 +233,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   terminalButton: {
-    backgroundColor: systemColors.blue,
+    backgroundColor: colors.blue,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
   terminalButtonText: {
-    color: '#FFFFFF',
+    color: actionTextColor,
     fontWeight: '600',
   },
   feedbackBar: {
-    backgroundColor: palette.mint,
+    backgroundColor: colors.barBg,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -244,14 +251,14 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   feedbackText: {
-    color: palette.accentStrong,
+    color: colors.accent,
   },
   scrollContent: {
     paddingBottom: theme.spacing.xxl,
     gap: theme.spacing.md,
   },
   statusCard: {
-    backgroundColor: systemColors.secondaryBackground,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     ...theme.shadow.card,
@@ -272,16 +279,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: palette.clay,
+    backgroundColor: colors.orange,
   },
   statusOnline: {
-    backgroundColor: systemColors.green,
+    backgroundColor: colors.green,
   },
   attachedText: {
-    color: palette.accent,
+    color: colors.accent,
   },
   section: {
-    backgroundColor: systemColors.secondaryBackground,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     ...theme.shadow.card,
@@ -299,32 +306,32 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: systemColors.separator,
+    borderColor: colors.border,
     borderRadius: theme.radii.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontFamily: 'JetBrainsMono_400Regular',
     fontSize: 14,
-    color: systemColors.label,
-    backgroundColor: systemColors.background,
+    color: colors.text,
+    backgroundColor: colors.card,
   },
   actionButton: {
-    backgroundColor: systemColors.blue,
+    backgroundColor: colors.blue,
     paddingHorizontal: 16,
     borderRadius: theme.radii.md,
     justifyContent: 'center',
   },
   actionButtonDisabled: {
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
   },
   actionButtonText: {
-    color: '#FFFFFF',
+    color: actionTextColor,
   },
   commandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: systemColors.background,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -334,17 +341,18 @@ const styles = StyleSheet.create({
   commandText: {
     flex: 1,
     fontSize: 12,
-    color: palette.muted,
+    color: colors.textSecondary,
   },
   killButton: {
     alignSelf: 'center',
-    backgroundColor: systemColors.red,
+    backgroundColor: colors.red,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: theme.radii.md,
   },
   killText: {
-    color: '#FFFFFF',
+    color: actionTextColor,
     fontWeight: '600',
   },
-});
+  });
+};

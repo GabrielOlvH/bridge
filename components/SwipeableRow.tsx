@@ -1,9 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { View, StyleSheet, Pressable, Animated } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/AppText';
 import { systemColors } from '@/lib/colors';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { Trash2 } from 'lucide-react-native';
 
 type SwipeableRowProps = {
@@ -19,6 +20,8 @@ export function SwipeableRow({
   onAction,
   actionLabel = 'Action',
 }: SwipeableRowProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const swipeableRef = useRef<Swipeable>(null);
 
   const handleDelete = () => {
@@ -50,7 +53,7 @@ export function SwipeableRow({
           style={[styles.actionButton, { backgroundColor: systemColors.red }]}
           onPress={handleDelete}
         >
-          <Trash2 size={20} color="#FFFFFF" />
+          <Trash2 size={20} color={colors.accentText} />
         </Pressable>
       </Animated.View>
     );
@@ -98,7 +101,7 @@ export function SwipeableRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   rightAction: {
     justifyContent: 'center',
     alignItems: 'flex-end',
@@ -117,7 +120,7 @@ const styles = StyleSheet.create({
     width: 100,
   },
   actionText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontWeight: '600',
   },
 });

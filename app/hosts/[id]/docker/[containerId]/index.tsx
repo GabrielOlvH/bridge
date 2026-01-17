@@ -8,7 +8,8 @@ import { useStore } from '@/lib/store';
 import { useHostLive } from '@/lib/live';
 import { dockerContainerAction } from '@/lib/api';
 import { DockerContainer } from '@/lib/types';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 function isContainerRunning(container: DockerContainer) {
   if (container.state) return container.state.toLowerCase() === 'running';
@@ -30,6 +31,7 @@ function formatBytes(bytes?: number) {
 
 export default function DockerContainerScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ id: string; containerId: string }>();
   const { hosts } = useStore();
   const host = hosts.find((item) => item.id === params.id);
@@ -42,6 +44,8 @@ export default function DockerContainerScreen() {
     const id = decodeURIComponent(params.containerId);
     return docker.containers.find((item) => item.id === id || item.name === id) || null;
   }, [docker?.containers, params.containerId]);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   if (!host) {
     return (
@@ -193,7 +197,16 @@ export default function DockerContainerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,7 +229,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   statusCard: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     ...theme.shadow.card,
@@ -230,13 +243,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statusRunning: {
-    color: palette.accent,
+    color: colors.green,
   },
   statusStopped: {
-    color: palette.clay,
+    color: colors.red,
   },
   actionsRow: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.sm,
     gap: 10,
@@ -246,19 +259,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: theme.radii.md,
     alignItems: 'center',
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
   },
   actionButtonDanger: {
-    backgroundColor: palette.blush,
+    backgroundColor: withAlpha(colors.red, 0.12),
   },
   actionText: {
-    color: palette.accentStrong,
+    color: colors.accent,
   },
   actionTextDanger: {
-    color: palette.clay,
+    color: colors.red,
   },
   detailCard: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     gap: 10,
@@ -268,10 +281,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   noticeCard: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     ...theme.shadow.card,
   },
 });
+
 

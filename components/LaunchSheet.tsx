@@ -13,7 +13,7 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
-import { useTheme } from '@/lib/useTheme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,11 +21,12 @@ import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
 import { providerIcons } from '@/components/icons/ProviderIcons';
 import { TerminalIcon } from '@/components/icons/HomeIcons';
+import { hostColors } from '@/lib/colors';
 import { useStore } from '@/lib/store';
 import { useProjects } from '@/lib/projects-store';
 import { createSession, fetchProjectScripts, sendText } from '@/lib/api';
 import { Command, PackageJsonScripts } from '@/lib/types';
-import { palette, theme, hostAccents } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 
 type LaunchMode = 'projects' | 'blank';
 
@@ -233,6 +234,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
   );
 
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const renderBackground = useCallback(
     (props: any) => (
@@ -271,8 +273,8 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
               setMode(event.nativeEvent.selectedSegmentIndex === 0 ? 'projects' : 'blank');
             }}
             style={styles.segmentedControl}
-            tintColor={palette.accent}
-            backgroundColor={palette.surfaceAlt}
+            tintColor={colors.accent}
+            backgroundColor={colors.cardPressed}
           />
         </View>
 
@@ -333,7 +335,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                     <View
                       style={[
                         styles.chipDot,
-                        { backgroundColor: host.color || hostAccents[idx % hostAccents.length] },
+                        { backgroundColor: host.color || hostColors[idx % hostColors.length] },
                       ]}
                     />
                     <AppText
@@ -416,7 +418,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                 </AppText>
                 {loadingScripts ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator color={palette.accent} />
+                    <ActivityIndicator color={colors.accent} />
                   </View>
                 ) : allCommands.length === 0 ? (
                   <View style={styles.emptyState}>
@@ -437,7 +439,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                         >
                           <Card style={styles.commandCard}>
                             <View style={styles.commandIcon}>
-                              {icon || <TerminalIcon size={14} color={palette.muted} />}
+                              {icon || <TerminalIcon size={14} color={colors.textSecondary} />}
                             </View>
                             <AppText variant="mono" style={styles.commandText} numberOfLines={1}>
                               {command.command}
@@ -484,7 +486,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                     <View
                       style={[
                         styles.chipDot,
-                        { backgroundColor: host.color || hostAccents[idx % hostAccents.length] },
+                        { backgroundColor: host.color || hostColors[idx % hostColors.length] },
                       ]}
                     />
                     <AppText
@@ -504,13 +506,13 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                   Session Name (optional)
                 </AppText>
                 <Card style={styles.inputCard}>
-                  <TerminalIcon size={18} color={palette.muted} />
+                  <TerminalIcon size={18} color={colors.textSecondary} />
                   <BottomSheetTextInput
                     style={styles.textInput}
                     value={blankSessionName}
                     onChangeText={setBlankSessionName}
                     placeholder="Auto-generated if empty..."
-                    placeholderTextColor={palette.muted}
+                    placeholderTextColor={colors.textMuted}
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
@@ -527,7 +529,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                 onPress={handleBlankLaunch}
                 disabled={!selectedHostId || launching}
               >
-                <TerminalIcon size={20} color={selectedHostId ? '#FFF' : palette.muted} />
+                <TerminalIcon size={20} color={selectedHostId ? colors.accentText : colors.textSecondary} />
                 <AppText
                   variant="subtitle"
                   style={[
@@ -546,10 +548,10 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   sheet: {
     marginHorizontal: 0,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -560,7 +562,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
   },
   handleIndicator: {
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
     width: 40,
   },
   content: {
@@ -589,7 +591,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   addLink: {
-    color: palette.accent,
+    color: colors.accent,
   },
   recentRow: {
     gap: theme.spacing.sm,
@@ -609,10 +611,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: theme.radii.md,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
   },
   chipSelected: {
-    backgroundColor: palette.mint,
+    backgroundColor: colors.barBg,
   },
   chipDot: {
     width: 8,
@@ -620,7 +622,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   chipTextSelected: {
-    color: palette.accentStrong,
+    color: colors.accent,
   },
   emptyState: {
     padding: theme.spacing.lg,
@@ -628,13 +630,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   addButton: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.radii.md,
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   loadingContainer: {
     padding: theme.spacing.lg,
@@ -664,12 +666,12 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   launchIconText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontSize: 12,
   },
   inputCard: {
@@ -682,7 +684,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: 'JetBrainsMono_400Regular',
     fontSize: 14,
-    color: palette.ink,
+    color: colors.text,
     paddingVertical: 8,
   },
   launchButtonContainer: {
@@ -693,17 +695,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingVertical: 16,
     borderRadius: theme.radii.lg,
   },
   launchButtonDisabled: {
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
   },
   launchButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   launchButtonTextDisabled: {
-    color: palette.muted,
+    color: colors.textMuted,
   },
 });

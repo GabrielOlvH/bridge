@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { PortInfo } from '@/lib/types';
 
 type PortRowProps = {
@@ -20,6 +21,9 @@ export function PortRow({
   onToggleSelect,
   onKill,
 }: PortRowProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Card style={styles.card}>
       <Pressable
@@ -56,7 +60,7 @@ export function PortRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     padding: 0,
     overflow: 'hidden',
@@ -72,21 +76,21 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: palette.line,
+    borderColor: colors.separator,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxSelected: {
-    backgroundColor: palette.accent,
-    borderColor: palette.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   checkmark: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontSize: 14,
     fontWeight: '600',
   },
   portBadge: {
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: theme.radii.sm,
@@ -95,7 +99,7 @@ const styles = StyleSheet.create({
   },
   portText: {
     fontSize: 14,
-    color: palette.accent,
+    color: colors.accent,
     fontWeight: '600',
   },
   info: {
@@ -106,12 +110,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   killButton: {
-    backgroundColor: palette.clay,
+    backgroundColor: colors.red,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: theme.radii.sm,
   },
   killText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { useTheme } from '@/lib/useTheme';
 
 type TerminalHeaderButtonGroupProps = {
   side: 'left' | 'right';
@@ -9,16 +10,16 @@ type TerminalHeaderButtonGroupProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-const DEFAULT_BORDER_COLOR = '#1E2226';
-const DEFAULT_BG_COLOR = '#0B0D0F';
-
 export function TerminalHeaderButtonGroup({
   children,
   side,
-  borderColor = DEFAULT_BORDER_COLOR,
-  backgroundColor = DEFAULT_BG_COLOR,
+  borderColor,
+  backgroundColor,
   style,
 }: TerminalHeaderButtonGroupProps) {
+  const { colors } = useTheme();
+  const resolvedBorderColor = borderColor ?? colors.terminalBorder;
+  const resolvedBackgroundColor = backgroundColor ?? colors.terminalBackground;
   const isLeft = side === 'left';
 
   return (
@@ -26,10 +27,10 @@ export function TerminalHeaderButtonGroup({
       style={[
         styles.container,
         {
-          backgroundColor,
-          borderBottomColor: borderColor,
-          borderRightColor: isLeft ? borderColor : 'transparent',
-          borderLeftColor: isLeft ? 'transparent' : borderColor,
+          backgroundColor: resolvedBackgroundColor,
+          borderBottomColor: resolvedBorderColor,
+          borderRightColor: isLeft ? resolvedBorderColor : 'transparent',
+          borderLeftColor: isLeft ? 'transparent' : resolvedBorderColor,
         },
         isLeft ? styles.left : styles.right,
         style,

@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { AppText } from '@/components/AppText';
-import { palette } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.row}>
       <AppText variant="subtitle" style={styles.title}>
@@ -14,7 +17,7 @@ export function SectionHeader({ title, action }: { title: string; action?: React
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     marginTop: 12,
     marginBottom: 8,
@@ -23,6 +26,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    color: palette.ink,
+    color: colors.text,
   },
 });

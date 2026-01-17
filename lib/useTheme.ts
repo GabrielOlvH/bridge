@@ -30,6 +30,13 @@ export const lightColors = {
   // UI elements
   barBg: '#F0EBE3',             // Progress bar backgrounds
   shadow: '#000000',
+
+  // Terminal theme
+  terminalBackground: '#FFFFFF',
+  terminalForeground: '#1A1A1A',
+  terminalMuted: '#6B6B6B',
+  terminalBorder: '#E5E5E5',
+  terminalPressed: '#F5F5F5',
 };
 
 export const darkColors = {
@@ -62,6 +69,13 @@ export const darkColors = {
   // UI elements
   barBg: '#2C2C2E',
   shadow: '#000000',
+
+  // Terminal theme
+  terminalBackground: '#0B0D0F',
+  terminalForeground: '#E6EDF3',
+  terminalMuted: '#8B949E',
+  terminalBorder: '#1E2226',
+  terminalPressed: '#1E2226',
 };
 
 export type ThemeColors = typeof lightColors;

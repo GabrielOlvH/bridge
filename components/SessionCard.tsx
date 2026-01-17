@@ -1,22 +1,36 @@
-import React, { useCallback } from 'react';
-import { Alert, Pressable, StyleSheet, View, Platform } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { Alert, Pressable, StyleSheet, View, Platform, type ColorValue } from 'react-native';
 import { GitBranch, Pause, Play, StopCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Card } from '@/components/Card';
 import { AppText } from '@/components/AppText';
-import { theme, palette } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import type { Host, Session } from '@/lib/types';
 
-const stateColorMap = {
-  running: { color: palette.accent, bg: palette.accent + '20' },
-  idle: { color: palette.clay, bg: palette.clay + '20' },
-  stopped: { color: palette.muted, bg: palette.muted + '20' },
-} as const;
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getStateColors(state: 'running' | 'idle' | 'stopped', colors: ThemeColors) {
+  const stateColorMap = {
+    running: { color: colors.green, bg: withAlpha(colors.green, 0.16) },
+    idle: { color: colors.orange, bg: withAlpha(colors.orange, 0.16) },
+    stopped: { color: colors.textMuted, bg: withAlpha(colors.textMuted, 0.16) },
+  } as const;
+
+  return stateColorMap[state] || stateColorMap.stopped;
+}
 
 type SessionCardProps = {
   session: Session;
   host: Host;
-  hostColor: string;
+  hostColor: ColorValue;
   onPress: () => void;
   onKill: () => void;
 };
@@ -28,11 +42,13 @@ export function SessionCard({
   onPress,
   onKill,
 }: SessionCardProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const agentState = session.insights?.meta?.agentState ?? 'stopped';
   const gitBranch = session.insights?.git?.branch;
   const command = session.insights?.meta?.agentCommand;
 
-  const { color: stateColor, bg: stateBgColor } = stateColorMap[agentState];
+  const { color: stateColor, bg: stateBgColor } = getStateColors(agentState, colors);
 
   const stateLabel =
     agentState === 'running'
@@ -95,7 +111,7 @@ export function SessionCard({
               )}
               {gitBranch && (
                 <View style={styles.gitBadge}>
-                  <GitBranch size={10} color={palette.muted} />
+                  <GitBranch size={10} color={colors.textMuted} />
                   <AppText variant="mono" tone="muted" style={styles.gitText}>
                     {gitBranch}
                   </AppText>
@@ -109,7 +125,7 @@ export function SessionCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pressable: {
     borderRadius: theme.radii.lg,
   },
@@ -166,7 +182,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
   },
   gitText: {
     fontSize: 10,

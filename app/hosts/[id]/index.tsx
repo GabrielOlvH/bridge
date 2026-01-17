@@ -9,7 +9,8 @@ import { createSession, killSession } from '@/lib/api';
 import { systemColors } from '@/lib/colors';
 import { useHostLive } from '@/lib/live';
 import { useStore } from '@/lib/store';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { HostInfo } from '@/lib/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -60,6 +61,7 @@ function formatUptime(seconds?: number) {
 
 export default function HostDetailScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ id: string }>();
   const { hosts, updateHostLastSeen, removeHost } = useStore();
   const host = hosts.find((item) => item.id === params.id);
@@ -200,6 +202,8 @@ export default function HostDetailScreen() {
     }
   })();
 
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Screen>
       {/* Clean Header */}
@@ -281,7 +285,7 @@ export default function HostDetailScreen() {
                   <View
                     style={[
                       styles.metricFill,
-                      { width: `${Math.min(100, hostInfo.cpu.usage ?? 0)}%`, backgroundColor: palette.accent },
+                      { width: `${Math.min(100, hostInfo.cpu.usage ?? 0)}%`, backgroundColor: colors.blue },
                     ]}
                   />
                 </View>
@@ -295,7 +299,7 @@ export default function HostDetailScreen() {
                   <View
                     style={[
                       styles.metricFill,
-                      { width: `${Math.min(100, hostInfo.memory.usedPercent)}%`, backgroundColor: palette.mint },
+                      { width: `${Math.min(100, hostInfo.memory.usedPercent)}%`, backgroundColor: colors.green },
                     ]}
                   />
                 </View>
@@ -325,7 +329,7 @@ export default function HostDetailScreen() {
             value={newSession}
             onChangeText={setNewSession}
             placeholder="session name"
-            placeholderTextColor={palette.muted}
+            placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
           <Pressable onPress={handleCreate} style={styles.createButton}>
@@ -335,16 +339,7 @@ export default function HostDetailScreen() {
           </Pressable>
         </Card>
 
-        <SectionHeader
-          title={`Sessions (${sessions.length})`}
-          action={
-            <Pressable onPress={() => router.push('/keybinds')}>
-              <AppText variant="caps" tone="accent">
-                Keybinds
-              </AppText>
-            </Pressable>
-          }
-        />
+        <SectionHeader title={`Sessions (${sessions.length})`} />
 
         {sessions.length === 0 ? (
           <Card style={styles.emptyCard}>
@@ -382,7 +377,16 @@ export default function HostDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -405,7 +409,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   errorBox: {
-    backgroundColor: palette.blush,
+    backgroundColor: withAlpha(colors.red, 0.12),
     borderRadius: theme.radii.md,
     padding: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
@@ -434,7 +438,7 @@ const styles = StyleSheet.create({
   metricBar: {
     flex: 1,
     height: 6,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.barBg,
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -455,23 +459,23 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: palette.line,
+    borderColor: colors.border,
     borderRadius: theme.radii.md,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontFamily: 'SpaceGrotesk_400Regular',
     fontSize: 14,
-    color: palette.ink,
+    color: colors.text,
   },
   createButton: {
     marginTop: theme.spacing.xs,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingVertical: 8,
     borderRadius: theme.radii.md,
     alignItems: 'center',
   },
   createText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   sessionWrap: {
     marginBottom: 8,
@@ -502,7 +506,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
   },
   sessionFooter: {
     marginTop: theme.spacing.xs,
@@ -513,12 +517,12 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
     padding: theme.spacing.xs,
     borderRadius: theme.radii.sm,
-    backgroundColor: '#1a1d21',
+    backgroundColor: colors.terminalBackground,
   },
   previewLine: {
     fontSize: 10,
     lineHeight: 14,
-    color: '#a0a8b0',
+    color: colors.terminalMuted,
   },
   emptyCard: {
     padding: 32,

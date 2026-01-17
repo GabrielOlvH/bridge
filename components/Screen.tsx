@@ -16,11 +16,11 @@ export function Screen({
     <SafeAreaView
       style={[
         styles.root,
-        { backgroundColor: variant === 'terminal' ? '#0B0D0F' : colors.background },
+        { backgroundColor: variant === 'terminal' ? colors.terminalBackground : colors.background },
       ]}
       edges={variant === 'terminal' ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
     >
-      <StatusBar style={variant === 'terminal' ? 'light' : isDark ? 'light' : 'dark'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <View
         style={[
           styles.content,

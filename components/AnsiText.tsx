@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, TextStyle, StyleSheet } from 'react-native';
-import { palette } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 type AnsiSegment = {
   text: string;
@@ -108,6 +108,8 @@ type Props = {
 };
 
 export function AnsiText({ children, style, numberOfLines }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const segments = useMemo(() => parseAnsi(children), [children]);
 
   if (segments.length === 0) {
@@ -137,10 +139,10 @@ export function AnsiText({ children, style, numberOfLines }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     fontFamily: 'JetBrainsMono',
     fontSize: 10,
-    color: palette.muted,
+    color: colors.textMuted,
   },
 });

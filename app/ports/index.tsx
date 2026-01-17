@@ -18,12 +18,14 @@ import { PortRow } from '@/components/PortRow';
 import { useStore } from '@/lib/store';
 import { getPorts, killPorts } from '@/lib/api';
 import { Host, PortInfo } from '@/lib/types';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { systemColors } from '@/lib/colors';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export default function PortsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { colors } = useTheme();
   const { hosts, ready } = useStore();
 
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null);
@@ -54,6 +56,8 @@ export default function PortsScreen() {
   });
 
   const ports = portsData?.ports || [];
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const killMutation = useMutation({
     mutationFn: async (pids: number[]) => {
@@ -179,7 +183,7 @@ export default function PortsScreen() {
               <View
                 style={[
                   styles.hostDot,
-                  { backgroundColor: host.color || palette.accent },
+                  { backgroundColor: host.color || colors.accent },
                 ]}
               />
               <AppText
@@ -244,7 +248,7 @@ export default function PortsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -255,13 +259,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
   },
   modeButtonActive: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
   },
   modeButtonTextActive: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   hostSelector: {
     paddingBottom: theme.spacing.sm,
@@ -274,14 +278,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: theme.radii.md,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     marginRight: 8,
   },
   hostChipActive: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
   },
   hostChipTextActive: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   hostDot: {
     width: 8,
@@ -289,21 +293,21 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   killSelectedButton: {
-    backgroundColor: palette.clay,
+    backgroundColor: colors.red,
     paddingVertical: 14,
     borderRadius: theme.radii.md,
     alignItems: 'center',
     marginBottom: theme.spacing.sm,
   },
   killSelectedText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   scrollContent: {
     paddingBottom: theme.spacing.xxl,
     gap: theme.spacing.sm,
   },
   empty: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.lg,
     alignItems: 'center',
@@ -313,13 +317,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.sm,
   },
   emptyIconText: {
-    color: palette.muted,
+    color: colors.textSecondary,
   },
   emptyBody: {
     textAlign: 'center',
@@ -327,12 +331,12 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   cta: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
 });

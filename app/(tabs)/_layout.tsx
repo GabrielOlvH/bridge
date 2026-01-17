@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import { NativeTabs, Icon, Label, Badge } from 'expo-router/unstable-native-tabs';
 import { useStore } from '@/lib/store';
 import { useHostsLive } from '@/lib/live';
+import { useTheme } from '@/lib/useTheme';
 
 export default function TabLayout() {
+  const { colors } = useTheme();
   const { hosts } = useStore();
   const { stateMap } = useHostsLive(hosts, { sessions: true, docker: true });
 
@@ -23,7 +25,7 @@ export default function TabLayout() {
   }, [stateMap]);
 
   return (
-    <NativeTabs tintColor="#00d9ff" minimizeBehavior="onScrollDown">
+    <NativeTabs tintColor={colors.blue} minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'terminal', selected: 'terminal.fill' }} />
         <Label>Sessions</Label>

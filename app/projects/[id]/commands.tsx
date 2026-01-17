@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,10 +14,12 @@ import { AppText } from '@/components/AppText';
 import { Field } from '@/components/Field';
 import { FadeIn } from '@/components/FadeIn';
 import { useProjects } from '@/lib/projects-store';
-import { palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export default function ProjectCommandsScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { projects, addCustomCommand, removeCustomCommand } = useProjects();
 
@@ -63,6 +65,8 @@ export default function ProjectCommandsScreen() {
       ]
     );
   };
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   if (!project) {
     return (
@@ -197,7 +201,16 @@ export default function ProjectCommandsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -215,12 +228,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontSize: 20,
     marginTop: -2,
   },
@@ -234,7 +247,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   formCard: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     ...theme.shadow.card,
@@ -249,26 +262,26 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     paddingVertical: 12,
     borderRadius: theme.radii.md,
     alignItems: 'center',
   },
   saveButton: {
     flex: 1,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     borderRadius: theme.radii.md,
     alignItems: 'center',
   },
   saveButtonDisabled: {
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   empty: {
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.lg,
     alignItems: 'center',
@@ -280,13 +293,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   cta: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   commandsList: {
     gap: theme.spacing.sm,
@@ -294,7 +307,7 @@ const styles = StyleSheet.create({
   commandCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.surface,
+    backgroundColor: colors.card,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.md,
     gap: theme.spacing.md,
@@ -305,12 +318,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   deleteButton: {
-    backgroundColor: palette.blush,
+    backgroundColor: withAlpha(colors.red, 0.14),
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: theme.radii.sm,
   },
   deleteButtonText: {
-    color: palette.clay,
+    color: colors.red,
   },
 });

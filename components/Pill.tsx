@@ -13,19 +13,19 @@ export function Pill({ label, tone = 'neutral' }: { label: string; tone?: PillTo
     },
     success: {
       background: systemColors.green,
-      text: '#FFFFFF',
+      text: systemColors.label,
     },
     error: {
       background: systemColors.red,
-      text: '#FFFFFF',
+      text: systemColors.label,
     },
     warning: {
       background: systemColors.orange,
-      text: '#FFFFFF',
+      text: systemColors.label,
     },
     info: {
       background: systemColors.blue,
-      text: '#FFFFFF',
+      text: systemColors.label,
     },
   }[tone];
 

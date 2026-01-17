@@ -3,23 +3,24 @@ import { FadeIn } from '@/components/FadeIn';
 import { Card } from '@/components/Card';
 import { PlusIcon, ServerIcon, TerminalIcon } from '@/components/icons/HomeIcons';
 import { useLaunchSheet } from '@/lib/launch-sheet';
-import { PulsingDot } from '@/components/PulsingDot';
 import { Screen } from '@/components/Screen';
 import { SkeletonList } from '@/components/Skeleton';
-import { killSession, checkForUpdate, applyUpdate, UpdateStatus } from '@/lib/api';
-import { systemColors } from '@/lib/colors';
+import { killSession } from '@/lib/api';
+import { hostColors, systemColors } from '@/lib/colors';
 import { useHostsLive } from '@/lib/live';
 import { useStore } from '@/lib/store';
-import { hostAccents, palette, theme } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { Host, HostStatus, ProviderUsage, Session, SessionInsights } from '@/lib/types';
 import { useRouter } from 'expo-router';
-import { Download, GitBranch, Pause, Play, Plus, StopCircle } from 'lucide-react-native';
+import { GitBranch, Plus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View, type ColorValue } from 'react-native';
 
 type UsageCardProps = {
   provider: string;
   usage: ProviderUsage;
-  color: string;
+  color: ColorValue;
 };
 
 function formatReset(reset?: string): string {
@@ -52,62 +53,61 @@ function formatReset(reset?: string): string {
 }
 
 function UsageCard({ provider, usage, color }: UsageCardProps) {
-  const dailyLeft = usage.session?.percentLeft;
-  const weeklyLeft = usage.weekly?.percentLeft;
+  const { colors } = useTheme();
+  const primaryLeft = usage.session?.percentLeft;
+  const secondaryLeft = usage.weekly?.percentLeft;
 
-  if (dailyLeft == null && weeklyLeft == null) return null;
+  if (primaryLeft == null && secondaryLeft == null) return null;
+
+  const isCopilot = provider === 'Copilot';
+  const primaryLabel = isCopilot ? 'Premium' : 'Daily';
+  const secondaryLabel = isCopilot ? 'Chat' : 'Weekly';
 
   return (
-    <Card style={styles.usageCard}>
-      <AppText variant="caps" style={[styles.usageProvider, { color }]}>
+    <Card style={usageStyles.card}>
+      <AppText variant="caps" style={[usageStyles.provider, { color }]}>
         {provider}
       </AppText>
-      {dailyLeft != null && (
-        <View style={styles.usageRow}>
-          <View style={styles.usageRowHeader}>
-            <AppText variant="label" tone="muted" style={styles.usageLabel}>
-              Daily
+      {primaryLeft != null && (
+        <View style={usageStyles.row}>
+          <View style={usageStyles.rowHeader}>
+            <AppText variant="label" tone="muted" style={usageStyles.label}>
+              {primaryLabel}
             </AppText>
-            <AppText variant="mono" tone="muted" style={styles.usageReset}>
-              Resets in {formatReset(usage.session?.reset)}
-            </AppText>
+            {!isCopilot && usage.session?.reset && (
+              <AppText variant="mono" tone="muted" style={usageStyles.reset}>
+                Resets in {formatReset(usage.session?.reset)}
+              </AppText>
+            )}
           </View>
-          <View style={styles.usageBarContainer}>
-            <View style={styles.usageBarBg}>
-              <View
-                style={[
-                  styles.usageBarFill,
-                  { width: `${Math.min(100, dailyLeft)}%`, backgroundColor: color },
-                ]}
-              />
+          <View style={usageStyles.barContainer}>
+            <View style={[usageStyles.barBg, { backgroundColor: colors.barBg }]}>
+              <View style={[usageStyles.barFill, { width: `${Math.min(100, primaryLeft)}%`, backgroundColor: color }]} />
             </View>
-            <AppText variant="mono" style={styles.usagePercent}>
-              {Math.round(dailyLeft)}%
+            <AppText variant="mono" style={usageStyles.percent}>
+              {Math.round(primaryLeft)}%
             </AppText>
           </View>
         </View>
       )}
-      {weeklyLeft != null && (
-        <View style={styles.usageRow}>
-          <View style={styles.usageRowHeader}>
-            <AppText variant="label" tone="muted" style={styles.usageLabel}>
-              Weekly
+      {secondaryLeft != null && (
+        <View style={usageStyles.row}>
+          <View style={usageStyles.rowHeader}>
+            <AppText variant="label" tone="muted" style={usageStyles.label}>
+              {secondaryLabel}
             </AppText>
-            <AppText variant="mono" tone="muted" style={styles.usageReset}>
-              Resets in {formatReset(usage.weekly?.reset)}
-            </AppText>
+            {!isCopilot && usage.weekly?.reset && (
+              <AppText variant="mono" tone="muted" style={usageStyles.reset}>
+                Resets in {formatReset(usage.weekly?.reset)}
+              </AppText>
+            )}
           </View>
-          <View style={styles.usageBarContainer}>
-            <View style={styles.usageBarBg}>
-              <View
-                style={[
-                  styles.usageBarFill,
-                  { width: `${Math.min(100, weeklyLeft)}%`, backgroundColor: color },
-                ]}
-              />
+          <View style={usageStyles.barContainer}>
+            <View style={[usageStyles.barBg, { backgroundColor: colors.barBg }]}>
+              <View style={[usageStyles.barFill, { width: `${Math.min(100, secondaryLeft)}%`, backgroundColor: color }]} />
             </View>
-            <AppText variant="mono" style={styles.usagePercent}>
-              {Math.round(weeklyLeft)}%
+            <AppText variant="mono" style={usageStyles.percent}>
+              {Math.round(secondaryLeft)}%
             </AppText>
           </View>
         </View>
@@ -115,23 +115,36 @@ function UsageCard({ provider, usage, color }: UsageCardProps) {
     </Card>
   );
 }
-import {
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const usageStyles = StyleSheet.create({
+  card: { flex: 1, minWidth: 140, padding: 12, gap: 10 },
+  provider: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  row: { gap: 4 },
+  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  label: { fontSize: 11 },
+  reset: { fontSize: 9 },
+  barContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  barBg: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3 },
+  percent: { fontSize: 11, width: 32, textAlign: 'right' },
+});
 
 type SessionWithHost = Session & { host: Host; hostStatus: HostStatus };
 
 export default function SessionsScreen() {
   const router = useRouter();
-  const { hosts, ready } = useStore();
+  const { colors } = useTheme();
+  const { hosts, ready, preferences } = useStore();
   const [isManualRefresh, setIsManualRefresh] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<{ host: Host; status: UpdateStatus } | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
   const { open: openLaunchSheet } = useLaunchSheet();
 
   const { stateMap, refreshAll, refreshHost } = useHostsLive(hosts, {
@@ -163,44 +176,7 @@ export default function SessionsScreen() {
       (state) => state.status === 'online' || state.status === 'offline'
     );
 
-  // Check for agent updates on any online host
-  useEffect(() => {
-    const onlineHosts = hosts.filter((h) => stateMap[h.id]?.status === 'online');
-    if (onlineHosts.length === 0) return;
-
-    const checkUpdates = async () => {
-      for (const host of onlineHosts) {
-        try {
-          const status = await checkForUpdate(host);
-          if (status.updateAvailable) {
-            setUpdateInfo({ host, status });
-            return;
-          }
-        } catch {
-          // Ignore errors, host might not support updates
-        }
-      }
-      setUpdateInfo(null);
-    };
-
-    checkUpdates();
-    const interval = setInterval(checkUpdates, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, [hosts, stateMap]);
-
-  const handleUpdate = useCallback(async () => {
-    if (!updateInfo || isUpdating) return;
-    setIsUpdating(true);
-    try {
-      await applyUpdate(updateInfo.host);
-      Alert.alert('Update Started', 'The agent is updating and will restart.');
-      setUpdateInfo(null);
-    } catch (err) {
-      Alert.alert('Update Failed', err instanceof Error ? err.message : 'Could not apply update');
-    } finally {
-      setIsUpdating(false);
-    }
-  }, [updateInfo, isUpdating]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   // Aggregate usage from all sessions (take most recent per provider)
   const aggregatedUsage = useMemo(() => {
@@ -232,6 +208,12 @@ export default function SessionsScreen() {
 
     return { claude, codex, copilot };
   }, [sessions]);
+
+  const usageVisibility = preferences.usageCards;
+  const hasUsageCards =
+    (usageVisibility.claude && aggregatedUsage.claude) ||
+    (usageVisibility.codex && aggregatedUsage.codex) ||
+    (usageVisibility.copilot && aggregatedUsage.copilot);
 
   const handleKillSession = useCallback(
     (host: Host, sessionName: string) => {
@@ -292,25 +274,13 @@ export default function SessionsScreen() {
         <View style={styles.header}>
           <View>
             <AppText variant="title">Bridge</AppText>
-            {updateInfo && (
-              <Pressable
-                onPress={handleUpdate}
-                disabled={isUpdating}
-                style={styles.updateBanner}
-              >
-                <Download size={12} color={systemColors.blue as string} />
-                <AppText variant="mono" style={styles.updateText}>
-                  {isUpdating ? 'Updating...' : `Update available (${updateInfo.status.latestVersion})`}
-                </AppText>
-              </Pressable>
-            )}
           </View>
           {hosts.length > 0 && (
             <Pressable
               style={styles.launchButton}
               onPress={openLaunchSheet}
             >
-              <Plus size={18} color="#FFFFFF" />
+              <Plus size={18} color={colors.accentText} />
               <AppText variant="label" style={styles.launchButtonText}>
                 Launch
               </AppText>
@@ -334,17 +304,17 @@ export default function SessionsScreen() {
           }
         >
           {/* Usage Cards */}
-          {(aggregatedUsage.claude || aggregatedUsage.codex || aggregatedUsage.copilot) && (
+          {hasUsageCards && (
             <FadeIn>
               <View style={styles.usageCardsRow}>
-                {aggregatedUsage.claude && (
-                  <UsageCard provider="Claude" usage={aggregatedUsage.claude} color="#D97706" />
+                {usageVisibility.claude && aggregatedUsage.claude && (
+                  <UsageCard provider="Claude" usage={aggregatedUsage.claude} color={colors.orange} />
                 )}
-                {aggregatedUsage.codex && (
-                  <UsageCard provider="Codex" usage={aggregatedUsage.codex} color="#10B981" />
+                {usageVisibility.codex && aggregatedUsage.codex && (
+                  <UsageCard provider="Codex" usage={aggregatedUsage.codex} color={colors.green} />
                 )}
-                {aggregatedUsage.copilot && (
-                  <UsageCard provider="Copilot" usage={aggregatedUsage.copilot} color="#6366F1" />
+                {usageVisibility.copilot && aggregatedUsage.copilot && (
+                  <UsageCard provider="Copilot" usage={aggregatedUsage.copilot} color={colors.purple} />
                 )}
               </View>
             </FadeIn>
@@ -355,7 +325,7 @@ export default function SessionsScreen() {
               <Card style={styles.emptyCard}>
                 <View style={styles.emptyIconContainer}>
                   <View style={styles.emptyIconRing}>
-                    <ServerIcon size={28} color={palette.accent} />
+                    <ServerIcon size={28} color={colors.accent} />
                   </View>
                 </View>
                 <AppText variant="subtitle" style={styles.emptyTitle}>
@@ -383,7 +353,7 @@ export default function SessionsScreen() {
           ) : sessions.length === 0 && !isManualRefresh ? (
             <FadeIn delay={100}>
               <Card style={styles.emptySmall}>
-                <TerminalIcon size={24} color={palette.muted} />
+                <TerminalIcon size={24} color={colors.textSecondary} />
                 <AppText variant="label" tone="muted" style={styles.emptySmallText}>
                   No active sessions
                 </AppText>
@@ -391,130 +361,79 @@ export default function SessionsScreen() {
             </FadeIn>
           ) : (
             <View style={styles.sessionsList}>
-              {groupedSessions.map((group, groupIndex) => (
-                <FadeIn key={group.host.id} delay={100 + groupIndex * 50}>
-                  <View style={styles.hostGroup}>
-                    <View style={styles.hostGroupHeader}>
-                      <View
-                        style={[
-                          styles.hostGroupDot,
-                          {
-                            backgroundColor:
-                              group.host.color ||
-                              hostAccents[groupIndex % hostAccents.length],
-                          },
-                        ]}
-                      />
-                      <AppText variant="caps" style={styles.hostGroupName}>
-                        {group.host.name}
-                      </AppText>
-                      <View style={styles.hostGroupBadge}>
-                        <AppText variant="caps" tone="muted" style={styles.hostGroupCount}>
-                          {group.sessions.length}
+              {groupedSessions.map((group, groupIndex) => {
+                const hostColor = group.host.color || hostColors[groupIndex % hostColors.length];
+                return (
+                  <FadeIn key={group.host.id} delay={100 + groupIndex * 50}>
+                    <Card style={styles.hostGroupCard}>
+                      <View style={styles.hostGroupHeader}>
+                        <View style={[styles.hostGroupAccent, { backgroundColor: hostColor }]} />
+                        <AppText variant="label" style={styles.hostGroupName}>
+                          {group.host.name}
                         </AppText>
+                        {group.hostStatus === 'offline' && (
+                          <View style={styles.offlineBadge}>
+                            <AppText variant="mono" style={styles.offlineText}>offline</AppText>
+                          </View>
+                        )}
                       </View>
-                      {group.hostStatus === 'offline' && (
-                        <AppText variant="caps" style={styles.hostGroupOffline}>
-                          offline
-                        </AppText>
-                      )}
-                    </View>
-                    <View style={styles.hostGroupSessions}>
-                      {group.sessions.map((session) => {
-                        const agentState = session.insights?.meta?.agentState ?? 'stopped';
-                        const gitBranch = session.insights?.git?.branch;
+                      <View style={styles.hostGroupSessions}>
+                        {group.sessions.map((session, sessionIndex) => {
+                          const agentState = session.insights?.meta?.agentState ?? 'stopped';
+                          const gitBranch = session.insights?.git?.branch;
+                          const command = session.insights?.meta?.agentCommand;
+                          const isRunning = agentState === 'running';
+                          const isIdle = agentState === 'idle';
+                          const isLast = sessionIndex === group.sessions.length - 1;
 
-                        const stateColor =
-                          agentState === 'running'
-                            ? palette.accent
-                            : agentState === 'idle'
-                              ? palette.clay
-                              : palette.muted;
-
-                        const StateIcon =
-                          agentState === 'running'
-                            ? Play
-                            : agentState === 'idle'
-                              ? Pause
-                              : StopCircle;
-
-                        return (
-                          <Pressable
-                            key={session.name}
-                            onPress={() =>
-                              router.push(
-                                `/session/${group.host.id}/${encodeURIComponent(session.name)}/terminal`
-                              )
-                            }
-                            onLongPress={() => handleKillSession(group.host, session.name)}
-                            style={({ pressed }) => [
-                              styles.sessionPressable,
-                              pressed && styles.sessionCardPressed,
-                            ]}
-                          >
-                            <Card style={styles.sessionCard}>
-                              <View style={styles.sessionHeader}>
-                                <View
-                                  style={[
-                                    styles.sessionIndicator,
-                                    { backgroundColor: session.host.color || palette.accent },
-                                    session.attached && styles.sessionIndicatorActive,
-                                  ]}
-                                />
-                                <View style={styles.sessionInfo}>
-                                  <View style={styles.sessionTitleRow}>
-                                    <AppText
-                                      variant="subtitle"
-                                      numberOfLines={1}
-                                      style={styles.sessionName}
-                                    >
-                                      {session.name}
+                          return (
+                            <Pressable
+                              key={session.name}
+                              onPress={() =>
+                                router.push(
+                                  `/session/${group.host.id}/${encodeURIComponent(session.name)}/terminal`
+                                )
+                              }
+                              onLongPress={() => handleKillSession(group.host, session.name)}
+                              style={({ pressed }) => [
+                                styles.sessionRow,
+                                !isLast && styles.sessionRowBorder,
+                                pressed && styles.sessionRowPressed,
+                              ]}
+                            >
+                              <View style={styles.sessionRowContent}>
+                                <View style={[
+                                  styles.stateDot,
+                                  isRunning && styles.stateDotRunning,
+                                  isIdle && styles.stateDotIdle,
+                                ]} />
+                                <View style={styles.sessionTextContent}>
+                                  <AppText variant="body" numberOfLines={1} style={styles.sessionName}>
+                                    {session.name}
+                                  </AppText>
+                                  {command && (
+                                    <AppText variant="mono" tone="muted" numberOfLines={1} style={styles.sessionMeta}>
+                                      {command}
                                     </AppText>
-                                    <View
-                                      style={[
-                                        styles.sessionStateBadge,
-                                        { backgroundColor: stateColor + '18' },
-                                      ]}
-                                    >
-                                      <StateIcon size={10} color={stateColor} />
-                                    </View>
-                                  </View>
-                                  {(session.insights?.meta?.agentCommand || gitBranch) && (
-                                    <View style={styles.sessionSubtitleRow}>
-                                      {session.insights?.meta?.agentCommand && (
-                                        <AppText
-                                          variant="mono"
-                                          tone="muted"
-                                          numberOfLines={1}
-                                          style={styles.sessionCommand}
-                                        >
-                                          {session.insights.meta.agentCommand}
-                                        </AppText>
-                                      )}
-                                      {gitBranch && (
-                                        <View style={styles.sessionGitBadge}>
-                                          <GitBranch size={10} color={palette.muted} />
-                                          <AppText
-                                            variant="mono"
-                                            tone="muted"
-                                            style={styles.sessionGitText}
-                                          >
-                                            {gitBranch}
-                                          </AppText>
-                                        </View>
-                                      )}
-                                    </View>
                                   )}
                                 </View>
+                                {gitBranch && (
+                                  <View style={styles.gitPill}>
+                                    <GitBranch size={10} color={colors.textMuted} />
+                                    <AppText variant="mono" tone="muted" style={styles.gitPillText}>
+                                      {gitBranch}
+                                    </AppText>
+                                  </View>
+                                )}
                               </View>
-                            </Card>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                </FadeIn>
-              ))}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </Card>
+                  </FadeIn>
+                );
+              })}
             </View>
           )}
         </ScrollView>
@@ -523,7 +442,7 @@ export default function SessionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -534,24 +453,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
   },
   launchButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
     fontWeight: '600',
-  },
-  updateBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  updateText: {
-    fontSize: 11,
-    color: systemColors.blue as string,
   },
   scrollContent: {
     paddingBottom: 40,
@@ -595,7 +504,7 @@ const styles = StyleSheet.create({
   usageBarBg: {
     flex: 1,
     height: 6,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.barBg,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -619,7 +528,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: palette.mint,
+    backgroundColor: colors.barBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -635,13 +544,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     borderRadius: theme.radii.md,
     paddingVertical: 14,
     paddingHorizontal: 24,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   emptySmall: {
     flexDirection: 'row',
@@ -654,108 +563,92 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sessionsList: {
-    gap: 20,
+    gap: 12,
   },
-  hostGroup: {
-    gap: 10,
+  hostGroupCard: {
+    padding: 0,
+    overflow: 'hidden',
   },
   hostGroupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 4,
-    marginBottom: 2,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
   },
-  hostGroupDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  hostGroupAccent: {
+    width: 3,
+    height: 14,
+    borderRadius: 1.5,
   },
   hostGroupName: {
-    color: palette.ink,
+    flex: 1,
     fontWeight: '600',
   },
-  hostGroupBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: palette.surfaceAlt,
+  offlineBadge: {
+    backgroundColor: withAlpha(colors.orange, 0.18),
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  hostGroupCount: {
+  offlineText: {
+    color: colors.orange,
     fontSize: 10,
+    fontWeight: '500',
   },
-  hostGroupOffline: {
-    color: '#F59E0B',
-    fontSize: 10,
-    marginLeft: 4,
+  hostGroupSessions: {},
+  sessionRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  hostGroupSessions: {
-    gap: 8,
+  sessionRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
   },
-  sessionPressable: {
-    borderRadius: theme.radii.lg,
+  sessionRowPressed: {
+    backgroundColor: colors.cardPressed,
   },
-  sessionCard: {
-    padding: 14,
-  },
-  sessionCardPressed: {
-    transform: [{ scale: 0.99 }],
-    opacity: 0.92,
-  },
-  sessionHeader: {
+  sessionRowContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  sessionIndicator: {
-    width: 4,
-    height: 36,
-    borderRadius: 2,
+  stateDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
   },
-  sessionIndicatorActive: {
-    shadowColor: palette.accent,
+  stateDotRunning: {
+    backgroundColor: colors.green,
+    shadowColor: colors.green,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
-    shadowRadius: 6,
+    shadowRadius: 4,
   },
-  sessionInfo: {
+  stateDotIdle: {
+    backgroundColor: colors.orange,
+  },
+  sessionTextContent: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
-  sessionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sessionName: {
-    flex: 1,
-  },
-  sessionStateBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sessionSubtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sessionCommand: {
-    flex: 1,
+  sessionName: {},
+  sessionMeta: {
     fontSize: 11,
   },
-  sessionGitBadge: {
+  gitPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  sessionGitText: {
+  gitPillText: {
     fontSize: 10,
   },
 });

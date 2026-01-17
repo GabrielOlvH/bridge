@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
-import { Terminal, Box } from 'lucide-react-native';
+import { Terminal, Box, Download } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
 import { PulsingDot } from '@/components/PulsingDot';
-import { palette, theme } from '@/lib/theme';
+import type { UpdateStatus } from '@/lib/api';
+import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { Host } from '@/lib/types';
 
 type HostStatus = 'online' | 'offline' | 'checking';
@@ -15,9 +17,12 @@ type HostCardProps = {
   sessionCount: number;
   containerCount?: number;
   metrics?: { cpu?: number; ram?: number };
+  updateStatus?: UpdateStatus;
+  isUpdating?: boolean;
   onPress: () => void;
   onTerminal: () => void;
   onDocker: () => void;
+  onUpdate?: () => void;
 };
 
 function getHostname(url: string): string {
@@ -28,13 +33,22 @@ function getHostname(url: string): string {
   }
 }
 
-const statusColorMap = {
-  online: { color: palette.accent, bg: palette.mint },
-  offline: { color: palette.clay, bg: palette.blush },
-  checking: { color: palette.gold, bg: palette.surfaceAlt },
-} as const;
+function withAlpha(hex: string, alpha: number) {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
-function getStatusColors(status: HostStatus) {
+function getStatusColors(status: HostStatus, colors: ThemeColors) {
+  const statusColorMap = {
+    online: { color: colors.green, bg: withAlpha(colors.green, 0.16) },
+    offline: { color: colors.red, bg: withAlpha(colors.red, 0.16) },
+    checking: { color: colors.orange, bg: withAlpha(colors.orange, 0.16) },
+  } as const;
+
   return statusColorMap[status] || statusColorMap.checking;
 }
 
@@ -61,9 +75,20 @@ export function HostCard({
   onTerminal,
   onDocker,
 }: HostCardProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isOnline = status === 'online';
-  const { color: statusColor, bg: statusBg } = getStatusColors(status);
-  const hostColor = host.color || palette.accent;
+  const { color: statusColor, bg: statusBg } = getStatusColors(status, colors);
+  const hostColor = host.color || colors.accent;
+  const updateAvailable = Boolean(updateStatus?.updateAvailable);
+  const showUpdate = updateAvailable || isUpdating;
+  const updateLabel = isUpdating
+    ? 'Updating...'
+    : updateStatus?.latestVersion
+      ? `Update available (${updateStatus.latestVersion})`
+      : 'Update available';
+  const updateDisabled = !isOnline || isUpdating;
+  const updateAccent = updateDisabled ? colors.textMuted : colors.blue;
 
   return (
     <Pressable onPress={onPress}>
@@ -136,6 +161,15 @@ export function HostCard({
           )}
         </View>
 
+        {showUpdate && (
+          <View style={styles.updateRow}>
+            <Download size={14} color={updateAccent} />
+            <AppText variant="mono" style={[styles.updateText, { color: updateAccent }]}>
+              {updateLabel}
+            </AppText>
+          </View>
+        )}
+
         {/* Actions Row */}
         <View style={styles.actions}>
           <Pressable
@@ -147,17 +181,44 @@ export function HostCard({
             disabled={!isOnline}
             hitSlop={4}
           >
-            <Terminal size={16} color={isOnline ? palette.accent : palette.muted} />
+            <Terminal size={16} color={isOnline ? colors.accent : colors.textMuted} />
             <AppText
               variant="caps"
               style={[
                 styles.actionButtonText,
-                { color: isOnline ? palette.accent : palette.muted },
+                { color: isOnline ? colors.accent : colors.textMuted },
               ]}
             >
               Terminal
             </AppText>
           </Pressable>
+
+          {showUpdate && onUpdate && (
+            <Pressable
+              style={[
+                styles.actionButton,
+                styles.actionButtonUpdate,
+                updateDisabled && styles.actionButtonDisabled,
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                onUpdate();
+              }}
+              disabled={updateDisabled}
+              hitSlop={4}
+            >
+              <Download size={16} color={updateAccent} />
+              <AppText
+                variant="caps"
+                style={[
+                  styles.actionButtonText,
+                  { color: updateAccent },
+                ]}
+              >
+                {isUpdating ? 'Updating...' : 'Update'}
+              </AppText>
+            </Pressable>
+          )}
 
           <Pressable
             style={[styles.actionButton, styles.actionButtonDocker]}
@@ -168,12 +229,12 @@ export function HostCard({
             disabled={!isOnline}
             hitSlop={4}
           >
-            <Box size={16} color={isOnline ? palette.blue : palette.muted} />
+            <Box size={16} color={isOnline ? colors.blue : colors.textMuted} />
             <AppText
               variant="caps"
               style={[
                 styles.actionButtonText,
-                { color: isOnline ? palette.blue : palette.muted },
+                { color: isOnline ? colors.blue : colors.textMuted },
               ]}
             >
               Docker
@@ -185,7 +246,7 @@ export function HostCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
@@ -229,7 +290,16 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     paddingTop: theme.spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: palette.line,
+    borderTopColor: colors.separator,
+  },
+  updateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: theme.spacing.xs,
+  },
+  updateText: {
+    fontSize: 11,
   },
   stat: {
     gap: 2,
@@ -253,10 +323,16 @@ const styles = StyleSheet.create({
     minWidth: 100,
   },
   actionButtonTerminal: {
-    backgroundColor: palette.mint,
+    backgroundColor: withAlpha(colors.green, 0.12),
   },
   actionButtonDocker: {
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
+  },
+  actionButtonUpdate: {
+    backgroundColor: withAlpha(colors.blue, 0.12),
+  },
+  actionButtonDisabled: {
+    backgroundColor: colors.cardPressed,
   },
   actionButtonText: {
     fontWeight: '600',

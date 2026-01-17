@@ -8,10 +8,13 @@ import { Field } from '@/components/Field';
 import { DirectoryBrowser } from '@/components/DirectoryBrowser';
 import { useStore } from '@/lib/store';
 import { useProjects } from '@/lib/projects-store';
-import { palette, theme, hostAccents } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { hostColors } from '@/lib/colors';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export default function NewProjectScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { hosts } = useStore();
   const { addProject } = useProjects();
 
@@ -56,6 +59,8 @@ export default function NewProjectScreen() {
     setShowBrowser(false);
   };
 
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Screen>
       <View style={styles.header}>
@@ -88,7 +93,7 @@ export default function NewProjectScreen() {
                 <View
                   style={[
                     styles.hostDot,
-                    { backgroundColor: host.color || hostAccents[idx % hostAccents.length] },
+                    { backgroundColor: host.color || hostColors[idx % hostColors.length] },
                   ]}
                 />
                 <AppText
@@ -188,7 +193,7 @@ export default function NewProjectScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -220,13 +225,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: theme.radii.md,
-    backgroundColor: palette.surfaceAlt,
+    backgroundColor: colors.cardPressed,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   hostCardSelected: {
-    backgroundColor: palette.mint,
-    borderColor: palette.accent,
+    backgroundColor: colors.barBg,
+    borderColor: colors.accent,
   },
   hostDot: {
     width: 10,
@@ -234,7 +239,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   hostTextSelected: {
-    color: palette.accentStrong,
+    color: colors.text,
   },
   emptyState: {
     padding: theme.spacing.lg,
@@ -242,13 +247,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   addHostButton: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.radii.md,
   },
   addHostButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   pathSection: {
     marginBottom: theme.spacing.sm,
@@ -265,39 +270,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   browseButton: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 12,
     borderRadius: theme.radii.md,
     marginTop: 1,
   },
   browseButtonDisabled: {
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
   },
   browseButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   browseButtonTextDisabled: {
-    color: palette.muted,
+    color: colors.textMuted,
   },
   hint: {
     marginBottom: theme.spacing.lg,
   },
   submitButton: {
-    backgroundColor: palette.accent,
+    backgroundColor: colors.accent,
     paddingVertical: 16,
     borderRadius: theme.radii.md,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: palette.line,
+    backgroundColor: colors.separator,
   },
   submitButtonText: {
-    color: '#FFFFFF',
+    color: colors.accentText,
   },
   browserModal: {
     flex: 1,
-    backgroundColor: palette.surface,
+    backgroundColor: colors.background,
     paddingTop: 60,
     paddingHorizontal: theme.spacing.md,
   },
