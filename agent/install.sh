@@ -161,14 +161,24 @@ EOF
     echo -e "${GREEN}✓ Configuration saved${NC}"
 }
 
+# Detect init system
+INIT_SYSTEM=""
+detect_init_system() {
+    if command -v systemctl &> /dev/null && systemctl --user status &> /dev/null; then
+        INIT_SYSTEM="systemd"
+    elif command -v rc-service &> /dev/null; then
+        INIT_SYSTEM="openrc"
+    else
+        INIT_SYSTEM="manual"
+    fi
+}
+
 # Setup systemd
 setup_systemd() {
-    echo -e "\n${BLUE}Setting up systemd services...${NC}"
+    echo -e "\n${BLUE}Setting up systemd service...${NC}"
 
-    # Create user systemd directory
     mkdir -p "$HOME/.config/systemd/user"
 
-    # Main service
     cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=Bridge Agent - Terminal Management Server
@@ -190,17 +200,89 @@ EnvironmentFile=$INSTALL_DIR/agent/.env
 WantedBy=default.target
 EOF
 
-    # Enable lingering (allows user services to run without login)
     if command -v loginctl &> /dev/null; then
         loginctl enable-linger "$USER" 2>/dev/null || true
     fi
 
-    # Reload and enable
     systemctl --user daemon-reload
     systemctl --user enable "$SERVICE_NAME.service"
     systemctl --user start "$SERVICE_NAME.service"
 
     echo -e "${GREEN}✓ Systemd service configured and started${NC}"
+}
+
+# Setup OpenRC
+setup_openrc() {
+    echo -e "\n${BLUE}Setting up OpenRC service...${NC}"
+
+    # Create init script
+    cat > "$INSTALL_DIR/agent/$SERVICE_NAME.init" << EOF
+#!/sbin/openrc-run
+
+name="bridge-agent"
+description="Bridge Agent - Terminal Management Server"
+command="$(which node)"
+command_args="$INSTALL_DIR/agent/node_modules/.bin/tsx $INSTALL_DIR/agent/index.ts"
+command_background=true
+pidfile="/run/\${RC_SVCNAME}.pid"
+directory="$INSTALL_DIR/agent"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    export \$(cat $INSTALL_DIR/agent/.env | grep -v '^#' | xargs)
+}
+EOF
+    chmod +x "$INSTALL_DIR/agent/$SERVICE_NAME.init"
+
+    echo -e "${YELLOW}OpenRC init script created at: $INSTALL_DIR/agent/$SERVICE_NAME.init${NC}"
+    echo -e "${YELLOW}To install system-wide (requires root):${NC}"
+    echo -e "  sudo cp $INSTALL_DIR/agent/$SERVICE_NAME.init /etc/init.d/$SERVICE_NAME"
+    echo -e "  sudo rc-update add $SERVICE_NAME default"
+    echo -e "  sudo rc-service $SERVICE_NAME start"
+    echo
+    echo -e "${CYAN}Starting agent manually for now...${NC}"
+
+    # Start manually in background
+    cd "$INSTALL_DIR/agent"
+    export $(cat .env | grep -v '^#' | xargs)
+    nohup $(which node) node_modules/.bin/tsx index.ts > /tmp/bridge-agent.log 2>&1 &
+    echo $! > /tmp/bridge-agent.pid
+
+    echo -e "${GREEN}✓ Agent started (PID: $(cat /tmp/bridge-agent.pid))${NC}"
+}
+
+# Setup manual (no init system)
+setup_manual() {
+    echo -e "\n${YELLOW}No supported init system found. Starting manually...${NC}"
+
+    cd "$INSTALL_DIR/agent"
+    export $(cat .env | grep -v '^#' | xargs)
+    nohup $(which node) node_modules/.bin/tsx index.ts > /tmp/bridge-agent.log 2>&1 &
+    echo $! > /tmp/bridge-agent.pid
+
+    echo -e "${GREEN}✓ Agent started (PID: $(cat /tmp/bridge-agent.pid))${NC}"
+    echo -e "${YELLOW}Note: Agent will not auto-start on reboot${NC}"
+}
+
+# Setup service based on init system
+setup_service() {
+    detect_init_system
+
+    case "$INIT_SYSTEM" in
+        systemd)
+            setup_systemd
+            ;;
+        openrc)
+            setup_openrc
+            ;;
+        *)
+            setup_manual
+            ;;
+    esac
 }
 
 # Print success
@@ -213,13 +295,28 @@ print_success() {
 
     echo -e "Bridge Agent is now running on port ${BOLD}$PORT${NC}"
     echo
+
     echo -e "${BOLD}Useful commands:${NC}"
-    echo -e "  ${CYAN}View status:${NC}    systemctl --user status $SERVICE_NAME"
-    echo -e "  ${CYAN}View logs:${NC}      journalctl --user -u $SERVICE_NAME -f"
-    echo -e "  ${CYAN}Restart:${NC}        systemctl --user restart $SERVICE_NAME"
-    echo -e "  ${CYAN}Stop:${NC}           systemctl --user stop $SERVICE_NAME"
+    case "$INIT_SYSTEM" in
+        systemd)
+            echo -e "  ${CYAN}View status:${NC}    systemctl --user status $SERVICE_NAME"
+            echo -e "  ${CYAN}View logs:${NC}      journalctl --user -u $SERVICE_NAME -f"
+            echo -e "  ${CYAN}Restart:${NC}        systemctl --user restart $SERVICE_NAME"
+            echo -e "  ${CYAN}Stop:${NC}           systemctl --user stop $SERVICE_NAME"
+            ;;
+        openrc)
+            echo -e "  ${CYAN}View logs:${NC}      tail -f /tmp/bridge-agent.log"
+            echo -e "  ${CYAN}Stop:${NC}           kill \$(cat /tmp/bridge-agent.pid)"
+            echo -e "  ${CYAN}Start:${NC}          cd $INSTALL_DIR/agent && ./start.sh"
+            ;;
+        *)
+            echo -e "  ${CYAN}View logs:${NC}      tail -f /tmp/bridge-agent.log"
+            echo -e "  ${CYAN}Stop:${NC}           kill \$(cat /tmp/bridge-agent.pid)"
+            ;;
+    esac
     echo -e "  ${CYAN}Edit config:${NC}    nano $INSTALL_DIR/agent/.env"
     echo
+
     echo -e "${BOLD}Add to Bridge app:${NC}"
     echo -e "  URL: ${GREEN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'your-ip'):$PORT${NC}"
     if [ -n "$AUTH_TOKEN" ]; then
@@ -234,7 +331,7 @@ main() {
     check_prerequisites
     run_wizard
     install
-    setup_systemd
+    setup_service
     print_success
 }
 

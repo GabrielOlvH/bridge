@@ -29,19 +29,31 @@ fi
 
 echo -e "\n${CYAN}Stopping services...${NC}"
 
-# Stop and disable services
-systemctl --user stop "$SERVICE_NAME.service" 2>/dev/null || true
-systemctl --user disable "$SERVICE_NAME.service" 2>/dev/null || true
+# Stop systemd service if exists
+if command -v systemctl &> /dev/null; then
+    systemctl --user stop "$SERVICE_NAME.service" 2>/dev/null || true
+    systemctl --user disable "$SERVICE_NAME.service" 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/$SERVICE_NAME.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+fi
 
-echo -e "${CYAN}Removing service files...${NC}"
+# Stop OpenRC service if exists
+if command -v rc-service &> /dev/null; then
+    sudo rc-service "$SERVICE_NAME" stop 2>/dev/null || true
+    sudo rc-update del "$SERVICE_NAME" default 2>/dev/null || true
+    sudo rm -f "/etc/init.d/$SERVICE_NAME" 2>/dev/null || true
+fi
 
-# Remove service files
-rm -f "$HOME/.config/systemd/user/$SERVICE_NAME.service"
+# Kill manual process if running
+if [ -f /tmp/bridge-agent.pid ]; then
+    kill $(cat /tmp/bridge-agent.pid) 2>/dev/null || true
+    rm -f /tmp/bridge-agent.pid
+fi
 
-# Reload systemd
-systemctl --user daemon-reload 2>/dev/null || true
+# Clean up log
+rm -f /tmp/bridge-agent.log
 
-echo -e "${GREEN}✓ Services removed${NC}"
+echo -e "${GREEN}✓ Services stopped${NC}"
 
 # Ask about removing files
 echo
