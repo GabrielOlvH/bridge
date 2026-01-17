@@ -498,7 +498,8 @@ function buildApp() {
 
       // Compare commits
       const local = execSync('git rev-parse HEAD', { cwd: installDir, encoding: 'utf8' }).trim();
-      const remote = execSync('git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null', {
+      // Use --verify to avoid outputting the input string when ref doesn't exist
+      const remote = execSync('git rev-parse --verify origin/main 2>/dev/null || git rev-parse --verify origin/master', {
         cwd: installDir,
         encoding: 'utf8',
       }).trim();

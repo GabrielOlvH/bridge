@@ -22,7 +22,7 @@ git fetch origin main --quiet 2>/dev/null || git fetch origin master --quiet 2>/
 
 # Get current and remote commits
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null)
+REMOTE=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse --verify origin/master)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
     log "Already up to date ($(echo $LOCAL | head -c 7))"
