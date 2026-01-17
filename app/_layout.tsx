@@ -56,10 +56,7 @@ export default function RootLayout() {
               <ThemeProvider value={navTheme}>
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="(tabs)" />
-                  <Stack.Screen
-                    name="session/[hostId]/[name]/terminal"
-                    options={{ animation: 'none' }}
-                  />
+                  <Stack.Screen name="session/[hostId]/[name]/terminal" />
                   <Stack.Screen name="hosts/[id]" />
                   <Stack.Screen name="hosts/new" />
                   <Stack.Screen name="hosts/[id]/edit" />
