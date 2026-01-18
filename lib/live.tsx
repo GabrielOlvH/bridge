@@ -1,4 +1,6 @@
 import { DockerSnapshot, Host, HostInfo, HostStatus, Session } from '@/lib/types';
+import { probeHealth } from '@/lib/api';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type LiveOptions = {
@@ -9,6 +11,7 @@ type LiveOptions = {
   host?: boolean;
   docker?: boolean;
   intervalMs?: number;
+  enabled?: boolean;
 };
 
 type HostLiveState = {
@@ -38,7 +41,40 @@ type ConnectionEntry = {
   optionsKey: string;
   reconnects: number;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
+  hasSnapshot: boolean;
+  errorProbe: Promise<void> | null;
+  ignoreClose?: boolean;
 };
+
+const CONNECTION_PROBE_TIMEOUT_MS = 2500;
+const liveStateCache = new Map<string, HostLiveState>();
+
+function describeNoAgentMessage(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl);
+    const port = url.port;
+    if (port && port !== '4020') {
+      return `No agent detected on port ${port}.`;
+    }
+  } catch {}
+  return 'No agent detected on this port (default 4020).';
+}
+
+function formatProbeError(baseUrl: string, result: Awaited<ReturnType<typeof probeHealth>>): string | null {
+  switch (result.status) {
+    case 'unauthorized':
+      return 'Agent requires token';
+    case 'not-found':
+    case 'invalid-response':
+      return describeNoAgentMessage(baseUrl);
+    case 'unreachable':
+      return 'Host unreachable';
+    case 'error':
+      return result.statusCode ? `Connection failed (${result.statusCode})` : 'Connection failed';
+    default:
+      return null;
+  }
+}
 
 function buildEventsUrl(host: Host, options: LiveOptions): string {
   try {
@@ -61,7 +97,9 @@ function buildEventsUrl(host: Host, options: LiveOptions): string {
 }
 
 function buildOptionsKey(options: LiveOptions): string {
+  const enabled = options.enabled !== false;
   return [
+    enabled ? 'e1' : 'e0',
     options.sessions ? 's1' : 's0',
     options.preview ? 'p1' : 'p0',
     options.previewLines ? `l${options.previewLines}` : 'l0',
@@ -73,13 +111,25 @@ function buildOptionsKey(options: LiveOptions): string {
 }
 
 export function useHostsLive(hosts: Host[], options: LiveOptions) {
-  const [stateMap, setStateMap] = useState<Record<string, HostLiveState>>({});
+  const initialState = (() => {
+    const next: Record<string, HostLiveState> = {};
+    hosts.forEach((host) => {
+      const cached = liveStateCache.get(host.id);
+      if (cached) next[host.id] = cached;
+    });
+    return next;
+  })();
+  const [stateMap, setStateMap] = useState<Record<string, HostLiveState>>(initialState);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
   const connectionsRef = useRef<Map<string, ConnectionEntry>>(new Map());
   const mountedRef = useRef(true);
   const optionsRef = useRef(options);
+  const enabled = options.enabled !== false && appState === 'active';
   const optionsKey = useMemo(
-    () => buildOptionsKey(options),
+    () => buildOptionsKey({ ...options, enabled }),
     [
+      enabled,
+      options.enabled,
       options.sessions,
       options.preview,
       options.previewLines,
@@ -91,20 +141,27 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
   );
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     optionsRef.current = options;
   }, [optionsKey]);
 
   const updateState = useCallback((hostId: string, updater: (prev: HostLiveState) => HostLiveState) => {
     if (!mountedRef.current) return;
     setStateMap((prev) => {
-      const current = prev[hostId] || { status: 'checking', sessions: [] };
+      const current = prev[hostId] || liveStateCache.get(hostId) || { status: 'checking', sessions: [] };
       const nextState = updater(current);
+      liveStateCache.set(hostId, nextState);
       return { ...prev, [hostId]: nextState };
     });
   }, []);
 
   const connectHost = useCallback(
     (host: Host) => {
+      if (!enabled) return;
       const url = buildEventsUrl(host, optionsRef.current);
       if (!url) {
         updateState(host.id, (prev) => ({ ...prev, status: 'offline', error: 'Invalid URL' }));
@@ -119,8 +176,22 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
         optionsKey,
         reconnects: 0,
         reconnectTimer: null,
+        hasSnapshot: false,
+        errorProbe: null,
       };
       connectionsRef.current.set(host.id, entry);
+
+      const startErrorProbe = () => {
+        if (entry.hasSnapshot || entry.errorProbe) return;
+        entry.errorProbe = (async () => {
+          const result = await probeHealth(host.baseUrl, host.authToken, CONNECTION_PROBE_TIMEOUT_MS);
+          const current = connectionsRef.current.get(host.id);
+          if (!current || current !== entry || current.socket !== socket || current.hasSnapshot) return;
+          const message = formatProbeError(host.baseUrl, result);
+          if (!message) return;
+          updateState(host.id, (prev) => ({ ...prev, status: 'offline', error: message }));
+        })();
+      };
 
       socket.onmessage = (event) => {
         let payload: LiveSnapshotMessage | LiveErrorMessage | null = null;
@@ -131,6 +202,7 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
         }
         if (!payload) return;
         if (payload.type === 'snapshot') {
+          entry.hasSnapshot = true;
           updateState(host.id, (prev) => ({
             ...prev,
             status: 'online',
@@ -150,7 +222,9 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
       };
 
       socket.onclose = () => {
+        if (entry.ignoreClose) return;
         updateState(host.id, (prev) => ({ ...prev, status: 'offline' }));
+        startErrorProbe();
         const current = connectionsRef.current.get(host.id);
         if (!current || current.socket !== socket) return;
         const delay = Math.min(10000, 1000 * Math.pow(2, current.reconnects));
@@ -164,10 +238,12 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
       };
 
       socket.onerror = () => {
+        if (entry.ignoreClose) return;
         updateState(host.id, (prev) => ({ ...prev, status: 'offline' }));
+        startErrorProbe();
       };
     },
-    [optionsKey, updateState]
+    [optionsKey, updateState, enabled]
   );
 
   useEffect(() => {
@@ -175,6 +251,7 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
     return () => {
       mountedRef.current = false;
       for (const entry of connectionsRef.current.values()) {
+        entry.ignoreClose = true;
         if (entry.reconnectTimer) clearTimeout(entry.reconnectTimer);
         entry.socket.close();
       }
@@ -185,17 +262,44 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
   useEffect(() => {
     const hostIds = new Set(hosts.map((host) => host.id));
     setStateMap((prev) => {
-      const keysToRemove = Object.keys(prev).filter((id) => !hostIds.has(id));
-      if (keysToRemove.length === 0) return prev;
-      const next = { ...prev };
-      for (const id of keysToRemove) {
-        delete next[id];
+      const next: Record<string, HostLiveState> = { ...prev };
+      let changed = false;
+
+      for (const id of Object.keys(next)) {
+        if (!hostIds.has(id)) {
+          delete next[id];
+          liveStateCache.delete(id);
+          changed = true;
+        }
       }
-      return next;
+
+      for (const host of hosts) {
+        if (!next[host.id]) {
+          const cached = liveStateCache.get(host.id);
+          if (cached) {
+            next[host.id] = cached;
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) return next;
+      return prev;
     });
+
+    if (!enabled) {
+      for (const entry of connectionsRef.current.values()) {
+        entry.ignoreClose = true;
+        if (entry.reconnectTimer) clearTimeout(entry.reconnectTimer);
+        entry.socket.close();
+      }
+      connectionsRef.current.clear();
+      return;
+    }
 
     for (const [id, entry] of connectionsRef.current.entries()) {
       if (!hostIds.has(id) || entry.optionsKey !== optionsKey) {
+        entry.ignoreClose = true;
         if (entry.reconnectTimer) clearTimeout(entry.reconnectTimer);
         entry.socket.close();
         connectionsRef.current.delete(id);
@@ -207,13 +311,14 @@ export function useHostsLive(hosts: Host[], options: LiveOptions) {
         connectHost(host);
       }
     });
-  }, [hosts, optionsKey, connectHost]);
+  }, [hosts, optionsKey, connectHost, enabled]);
 
   const refreshHost = useCallback((hostId: string) => {
+    if (!enabled) return;
     const entry = connectionsRef.current.get(hostId);
     if (!entry || entry.socket.readyState !== WebSocket.OPEN) return;
     entry.socket.send(JSON.stringify({ type: 'refresh' }));
-  }, []);
+  }, [enabled]);
 
   const refreshAll = useCallback(() => {
     for (const [hostId] of connectionsRef.current.entries()) {

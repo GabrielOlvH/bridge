@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bridge.app"
+      "bundleIdentifier": "com.bridge.app",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Find tmux agents on your local network."
+      }
     },
     "android": {
       "package": "com.bridge.app",

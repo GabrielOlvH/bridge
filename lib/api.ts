@@ -2,8 +2,43 @@ import { CursorInfo, DirectoryListing, Host, PackageJsonScripts, PortInfo, Sessi
 
 const DEFAULT_TIMEOUT_MS = 6000;
 
+export type HealthResponse = { ok: boolean; host: string; tmuxVersion?: string };
+export type EventLoopLagSnapshot = {
+  meanMs: number;
+  p95Ms: number;
+  maxMs: number;
+  samples: number;
+};
+export type PingResponse = { ok: boolean; ts: number; lag?: EventLoopLagSnapshot | null };
+
+export type HealthProbeResult =
+  | { status: 'ok'; payload: HealthResponse }
+  | { status: 'unauthorized' }
+  | { status: 'not-found' }
+  | { status: 'invalid-response' }
+  | { status: 'unreachable'; message?: string }
+  | { status: 'error'; statusCode?: number; message?: string };
+
+export type PingProbeResult =
+  | { status: 'ok'; payload: PingResponse }
+  | { status: 'unauthorized' }
+  | { status: 'not-found' }
+  | { status: 'invalid-response' }
+  | { status: 'unreachable'; message?: string }
+  | { status: 'error'; statusCode?: number; message?: string };
+
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
+}
+
+function buildHeaders(authToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return headers;
 }
 
 async function request<T>(
@@ -17,13 +52,7 @@ async function request<T>(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (host.authToken) {
-    headers.Authorization = `Bearer ${host.authToken}`;
-  }
+  const headers = buildHeaders(host.authToken);
 
   try {
     const response = await fetch(url, {
@@ -43,7 +72,89 @@ async function request<T>(
   }
 }
 
-export async function getHealth(host: Host): Promise<{ ok: boolean; host: string; tmuxVersion?: string }>{
+export async function probeHealth(
+  baseUrl: string,
+  authToken?: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<HealthProbeResult> {
+  const url = `${normalizeBaseUrl(baseUrl)}/health`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: buildHeaders(authToken),
+      signal: controller.signal,
+    });
+    if (response.status === 401) {
+      return { status: 'unauthorized' };
+    }
+    if (response.status === 404) {
+      return { status: 'not-found' };
+    }
+    if (!response.ok) {
+      const message = await response.text();
+      return { status: 'error', statusCode: response.status, message: message || undefined };
+    }
+    try {
+      const payload = (await response.json()) as HealthResponse;
+      if (!payload || payload.ok !== true || typeof payload.host !== 'string') {
+        return { status: 'invalid-response' };
+      }
+      return { status: 'ok', payload };
+    } catch {
+      return { status: 'invalid-response' };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err || '');
+    return { status: 'unreachable', message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function probePing(
+  baseUrl: string,
+  authToken?: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<PingProbeResult> {
+  const url = `${normalizeBaseUrl(baseUrl)}/ping`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: buildHeaders(authToken),
+      signal: controller.signal,
+    });
+    if (response.status === 401) {
+      return { status: 'unauthorized' };
+    }
+    if (response.status === 404) {
+      return { status: 'not-found' };
+    }
+    if (!response.ok) {
+      const message = await response.text();
+      return { status: 'error', statusCode: response.status, message: message || undefined };
+    }
+    try {
+      const payload = (await response.json()) as PingResponse;
+      if (!payload || payload.ok !== true || typeof payload.ts !== 'number') {
+        return { status: 'invalid-response' };
+      }
+      return { status: 'ok', payload };
+    } catch {
+      return { status: 'invalid-response' };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err || '');
+    return { status: 'unreachable', message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getHealth(host: Host): Promise<HealthResponse> {
   return request(host, '/health', { method: 'GET' });
 }
 

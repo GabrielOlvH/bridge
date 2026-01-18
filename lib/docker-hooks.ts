@@ -19,9 +19,9 @@ export type UseAllDockerResult = {
   hasDocker: boolean;
 };
 
-export function useAllDocker(): UseAllDockerResult {
+export function useAllDocker(options?: { enabled?: boolean }): UseAllDockerResult {
   const { hosts } = useStore();
-  const { stateMap, refreshAll, refreshHost } = useHostsLive(hosts, { docker: true });
+  const { stateMap, refreshAll, refreshHost } = useHostsLive(hosts, { docker: true, enabled: options?.enabled });
 
   const containers = useMemo(() => {
     const all: ContainerWithHost[] = [];

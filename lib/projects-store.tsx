@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Project, Command, RecentLaunch } from '@/lib/types';
+import { Project, RecentLaunch } from '@/lib/types';
 import { createId } from '@/lib/defaults';
 
 const PROJECTS_KEY = 'tmux.projects.v1';
@@ -11,7 +11,12 @@ async function loadProjects(): Promise<Project[]> {
   const raw = await AsyncStorage.getItem(PROJECTS_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as Project[];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((project) => {
+      const { customCommands: _customCommands, ...rest } = project as StoredProject;
+      return rest as Project;
+    });
   } catch {
     return [];
   }
@@ -36,6 +41,7 @@ async function saveRecentLaunches(launches: RecentLaunch[]): Promise<void> {
 }
 
 type ProjectDraft = Omit<Project, 'id'>;
+type StoredProject = Project & { customCommands?: unknown };
 
 const ProjectsContext = createContext<{
   projects: Project[];
@@ -44,9 +50,6 @@ const ProjectsContext = createContext<{
   addProject: (draft: ProjectDraft) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
-  addCustomCommand: (projectId: string, label: string, command: string) => Promise<void>;
-  updateCustomCommand: (projectId: string, commandId: string, updates: Partial<Command>) => Promise<void>;
-  removeCustomCommand: (projectId: string, commandId: string) => Promise<void>;
   addRecentLaunch: (launch: Omit<RecentLaunch, 'id' | 'timestamp'>) => Promise<void>;
   getProjectsByHost: (hostId: string) => Project[];
 } | null>(null);
@@ -112,44 +115,6 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     [projects, persistProjects]
   );
 
-  const addCustomCommand = useCallback(
-    async (projectId: string, label: string, command: string) => {
-      const nextProjects = projects.map((p) => {
-        if (p.id !== projectId) return p;
-        const newCommand: Command = { id: createId('cmd'), label, command };
-        return { ...p, customCommands: [...(p.customCommands || []), newCommand] };
-      });
-      await persistProjects(nextProjects);
-    },
-    [projects, persistProjects]
-  );
-
-  const updateCustomCommand = useCallback(
-    async (projectId: string, commandId: string, updates: Partial<Command>) => {
-      const nextProjects = projects.map((p) => {
-        if (p.id !== projectId) return p;
-        const customCommands = (p.customCommands || []).map((cmd) =>
-          cmd.id === commandId ? { ...cmd, ...updates } : cmd
-        );
-        return { ...p, customCommands };
-      });
-      await persistProjects(nextProjects);
-    },
-    [projects, persistProjects]
-  );
-
-  const removeCustomCommand = useCallback(
-    async (projectId: string, commandId: string) => {
-      const nextProjects = projects.map((p) => {
-        if (p.id !== projectId) return p;
-        const customCommands = (p.customCommands || []).filter((cmd) => cmd.id !== commandId);
-        return { ...p, customCommands };
-      });
-      await persistProjects(nextProjects);
-    },
-    [projects, persistProjects]
-  );
-
   const addRecentLaunch = useCallback(
     async (launch: Omit<RecentLaunch, 'id' | 'timestamp'>) => {
       const newLaunch: RecentLaunch = {
@@ -179,9 +144,6 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       addProject,
       updateProject,
       removeProject,
-      addCustomCommand,
-      updateCustomCommand,
-      removeCustomCommand,
       addRecentLaunch,
       getProjectsByHost,
     }),
@@ -192,9 +154,6 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       addProject,
       updateProject,
       removeProject,
-      addCustomCommand,
-      updateCustomCommand,
-      removeCustomCommand,
       addRecentLaunch,
       getProjectsByHost,
     ]

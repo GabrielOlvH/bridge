@@ -57,19 +57,20 @@ export const theme = {
 
 /**
  * Navigation theme for React Navigation.
- * Note: React Navigation's Theme type requires string colors,
- * so we use the palette fallbacks here. For components that support
- * PlatformColor, use systemColors directly.
+ * Returns theme colors based on dark mode state.
  */
-export const navTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    primary: palette.accent,
-    background: '#F7F3EB',
-    card: palette.surface,
-    text: palette.ink,
-    border: palette.line,
-    notification: palette.blue,
-  },
-};
+export function getNavTheme(isDark: boolean) {
+  return {
+    ...DefaultTheme,
+    dark: isDark,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: isDark ? '#FFFFFF' : palette.accent,
+      background: isDark ? '#000000' : '#F7F3EB',
+      card: isDark ? '#1C1C1E' : palette.surface,
+      text: isDark ? '#FFFFFF' : palette.ink,
+      border: isDark ? '#38383A' : palette.line,
+      notification: isDark ? '#0A84FF' : palette.blue,
+    },
+  };
+}

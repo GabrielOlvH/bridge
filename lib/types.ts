@@ -1,17 +1,10 @@
 import type { ColorValue } from 'react-native';
 
-export type HostConnection = 'ssh' | 'mosh';
-
 export type Host = {
   id: string;
   name: string;
   baseUrl: string;
   authToken?: string;
-  username?: string;
-  sshHost?: string;
-  sshPort?: number;
-  identityFile?: string;
-  connection: HostConnection;
   color?: ColorValue;
   lastSeen?: number;
 };
@@ -91,6 +84,9 @@ export type DockerContainer = {
   netIO?: string;
   blockIO?: string;
   pids?: number;
+  labels?: Record<string, string>;
+  composeProject?: string;
+  composeService?: string;
 };
 
 export type DockerImage = {
@@ -185,12 +181,17 @@ export type Command = {
   icon?: string;
 };
 
+export type ProviderId = 'claude' | 'codex' | 'copilot' | 'cursor';
+
+export type Snippet = Command & {
+  providerIcon?: ProviderId;
+};
+
 export type Project = {
   id: string;
   hostId: string;
   name: string;
   path: string;
-  customCommands?: Command[];
 };
 
 export type RecentLaunch = {
