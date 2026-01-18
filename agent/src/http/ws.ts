@@ -4,7 +4,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { TOKEN } from '../config';
 import { pty } from '../pty';
 import { runTmux } from '../tmux';
-import { buildLiveSnapshot, parseLiveConfig } from './live';
+import { getLiveSnapshot, parseLiveConfig } from './live';
 
 type TmuxInputPayload = {
   type: 'input';
@@ -17,7 +17,17 @@ type TmuxResizePayload = {
   rows: number;
 };
 
-type TmuxClientPayload = TmuxInputPayload | TmuxResizePayload;
+type TmuxProbePayload = {
+  type: 'probe';
+  id: number;
+};
+
+type TmuxAckPayload = {
+  type: 'ack';
+  bytes: number;
+};
+
+type TmuxClientPayload = TmuxInputPayload | TmuxResizePayload | TmuxProbePayload | TmuxAckPayload;
 
 function parseClientPayload(text: string): TmuxClientPayload | null {
   try {
@@ -32,6 +42,18 @@ function parseClientPayload(text: string): TmuxClientPayload | null {
         return { type: 'resize', cols, rows };
       }
     }
+    if (payload.type === 'probe') {
+      const id = Number(payload.id);
+      if (Number.isFinite(id)) {
+        return { type: 'probe', id };
+      }
+    }
+    if (payload.type === 'ack') {
+      const bytes = Number(payload.bytes);
+      if (Number.isFinite(bytes) && bytes >= 0) {
+        return { type: 'ack', bytes };
+      }
+    }
   } catch {}
   return null;
 }
@@ -41,9 +63,67 @@ function parseDimension(value: string | null, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function enableLowLatencySocket(ws: WebSocket) {
+  const socket = (ws as unknown as { _socket?: { setNoDelay?: (noDelay: boolean) => void } })._socket;
+  socket?.setNoDelay?.(true);
+}
+
+const FLOW_HIGH_WATERMARK = 128 * 1024;
+const FLOW_LOW_WATERMARK = 64 * 1024;
+const PROBE_START = '\u0001TERPROBE:';
+const PROBE_END = '\u0002';
+
 function attachPtyBridge(ws: WebSocket, term: ReturnType<typeof pty.spawn>, closeMessage: string) {
   let termClosed = false;
   let cleanedUp = false;
+  let inFlightBytes = 0;
+  let queuedBytes = 0;
+  let queue: string[] = [];
+  let isPaused = false;
+
+  const termControls = term as unknown as { pause?: () => void; resume?: () => void };
+
+  const maybePause = () => {
+    if (isPaused) return;
+    if (typeof termControls.pause === 'function') {
+      termControls.pause();
+      isPaused = true;
+    }
+  };
+
+  const maybeResume = () => {
+    if (!isPaused) return;
+    if (typeof termControls.resume === 'function') {
+      termControls.resume();
+      isPaused = false;
+    }
+  };
+
+  const flushQueue = () => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    while (queue.length > 0 && inFlightBytes <= FLOW_LOW_WATERMARK) {
+      const chunk = queue.shift();
+      if (!chunk) continue;
+      queuedBytes -= chunk.length;
+      ws.send(chunk);
+      inFlightBytes += chunk.length;
+    }
+    if (queue.length === 0) {
+      maybeResume();
+    }
+  };
+
+  const sendOrQueue = (data: string) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    if (inFlightBytes >= FLOW_HIGH_WATERMARK) {
+      queue.push(data);
+      queuedBytes += data.length;
+      maybePause();
+      return;
+    }
+    ws.send(data);
+    inFlightBytes += data.length;
+  };
 
   const handleMessage = (data: RawData) => {
     const text = data.toString();
@@ -58,6 +138,20 @@ function attachPtyBridge(ws: WebSocket, term: ReturnType<typeof pty.spawn>, clos
       term.resize(payload.cols, payload.rows);
       return;
     }
+    if (payload?.type === 'probe') {
+      if (ws.readyState === WebSocket.OPEN) {
+        const response = `${PROBE_START}${JSON.stringify({ id: payload.id, serverTime: Date.now() })}${PROBE_END}`;
+        ws.send(response);
+      }
+      return;
+    }
+    if (payload?.type === 'ack') {
+      const bytes = payload.bytes;
+      if (bytes <= 0) return;
+      inFlightBytes = Math.max(0, inFlightBytes - bytes);
+      flushQueue();
+      return;
+    }
     if (termClosed) return;
     term.write(text);
   };
@@ -66,6 +160,9 @@ function attachPtyBridge(ws: WebSocket, term: ReturnType<typeof pty.spawn>, clos
     if (cleanedUp) return;
     cleanedUp = true;
     termClosed = true;
+    queue = [];
+    queuedBytes = 0;
+    inFlightBytes = 0;
     try {
       term.kill();
     } catch {}
@@ -73,7 +170,7 @@ function attachPtyBridge(ws: WebSocket, term: ReturnType<typeof pty.spawn>, clos
   };
 
   term.onData((data) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    sendOrQueue(data);
   });
 
   term.onExit(() => {
@@ -90,9 +187,9 @@ function attachPtyBridge(ws: WebSocket, term: ReturnType<typeof pty.spawn>, clos
 }
 
 export function attachWebSocketServers(server: Server) {
-  const termWss = new WebSocketServer({ noServer: true });
-  const dockerWss = new WebSocketServer({ noServer: true });
-  const eventsWss = new WebSocketServer({ noServer: true });
+  const termWss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+  const dockerWss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+  const eventsWss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
   const wssByPath = new Map([
     ['/ws', termWss],
     ['/events', eventsWss],
@@ -124,6 +221,7 @@ export function attachWebSocketServers(server: Server) {
   });
 
   termWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    enableLowLatencySocket(ws);
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const session = url.searchParams.get('session');
     if (!session) {
@@ -156,6 +254,7 @@ export function attachWebSocketServers(server: Server) {
   });
 
   dockerWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    enableLowLatencySocket(ws);
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const container = url.searchParams.get('container');
     if (!container) {
@@ -183,6 +282,7 @@ export function attachWebSocketServers(server: Server) {
   });
 
   eventsWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    enableLowLatencySocket(ws);
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const config = parseLiveConfig(url);
     let lastPayload = '';
@@ -190,7 +290,7 @@ export function attachWebSocketServers(server: Server) {
 
     const sendSnapshot = async () => {
       try {
-        const snapshot = await buildLiveSnapshot(config);
+        const snapshot = await getLiveSnapshot(config);
         const payload = JSON.stringify(snapshot);
         if (payload !== lastPayload && ws.readyState === WebSocket.OPEN) {
           ws.send(payload);

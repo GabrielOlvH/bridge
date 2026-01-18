@@ -20,6 +20,9 @@ type DockerContainer = {
   netIO?: string;
   blockIO?: string;
   pids?: number;
+  labels?: Record<string, string>;
+  composeProject?: string;
+  composeService?: string;
 };
 
 type DockerImage = {
@@ -118,6 +121,19 @@ function parseMemoryUsage(value: string | undefined): {
   };
 }
 
+function parseLabels(value: string | undefined): Record<string, string> | undefined {
+  if (!value) return undefined;
+  const labels: Record<string, string> = {};
+  value.split(',').forEach((entry) => {
+    const trimmed = entry.trim();
+    if (!trimmed) return;
+    const [key, ...rest] = trimmed.split('=');
+    if (!key) return;
+    labels[key] = rest.join('=').trim();
+  });
+  return Object.keys(labels).length ? labels : undefined;
+}
+
 async function runDockerJson<T>(args: string[], timeout = 8000): Promise<T[]> {
   const { stdout } = await execFileAsync('docker', args, { timeout });
   return parseJsonLines<T>(stdout);
@@ -169,6 +185,9 @@ async function buildDockerSnapshot(): Promise<DockerSnapshot> {
       const statsRow = statsMap.get(row.ID) || statsMap.get(row.Names);
       const memUsage = statsRow?.MemUsage as string | undefined;
       const memParsed = parseMemoryUsage(memUsage);
+      const labels = parseLabels(row.Labels);
+      const composeProject = labels?.['com.docker.compose.project'];
+      const composeService = labels?.['com.docker.compose.service'];
       return {
         id: row.ID,
         name: row.Names,
@@ -186,6 +205,9 @@ async function buildDockerSnapshot(): Promise<DockerSnapshot> {
         netIO: statsRow?.NetIO,
         blockIO: statsRow?.BlockIO,
         pids: statsRow?.PIDs ? Number(statsRow.PIDs) : undefined,
+        labels,
+        composeProject,
+        composeService,
       };
     });
 

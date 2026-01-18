@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 import { HOST_LABEL } from '../../config';
+import { getEventLoopLagSnapshot } from '../../diagnostics';
 import { getHostInfo } from '../../host';
 import { runTmux } from '../../tmux';
 import { getUsageSnapshot } from '../../usage';
@@ -14,6 +15,10 @@ export function registerCoreRoutes(app: Hono) {
       tmuxVersion = 'unknown';
     }
     return c.json({ ok: true, host: HOST_LABEL, tmuxVersion });
+  });
+
+  app.get('/ping', (c) => {
+    return c.json({ ok: true, ts: Date.now(), lag: getEventLoopLagSnapshot() });
   });
 
   app.get('/host', (c) => {
