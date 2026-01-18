@@ -5,16 +5,16 @@ import { PlusIcon, ServerIcon, TerminalIcon } from '@/components/icons/HomeIcons
 import { useLaunchSheet } from '@/lib/launch-sheet';
 import { Screen } from '@/components/Screen';
 import { SkeletonList } from '@/components/Skeleton';
-import { killSession } from '@/lib/api';
+import { getUsage, killSession } from '@/lib/api';
 import { hostColors, systemColors } from '@/lib/colors';
 import { useHostsLive } from '@/lib/live';
 import { useStore } from '@/lib/store';
 import { theme } from '@/lib/theme';
 import { ThemeColors, useTheme } from '@/lib/useTheme';
-import { Host, HostStatus, ProviderUsage, Session } from '@/lib/types';
+import { Host, HostStatus, ProviderUsage, Session, SessionInsights } from '@/lib/types';
 import { useRouter } from 'expo-router';
 import { GitBranch, Plus } from 'lucide-react-native';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View, type ColorValue } from 'react-native';
 
 type UsageCardProps = {
@@ -151,6 +151,7 @@ export default function SessionsScreen() {
     sessions: true,
     insights: true,
   });
+  const [hostUsageMap, setHostUsageMap] = useState<Record<string, SessionInsights>>({});
 
   const sessions = useMemo(() => {
     const all: SessionWithHost[] = [];
@@ -187,9 +188,16 @@ export default function SessionsScreen() {
     let codexPolled = 0;
     let copilotPolled = 0;
 
+    const allInsights: SessionInsights[] = [];
     sessions.forEach((session) => {
-      const insights = session.insights;
-      if (!insights) return;
+      if (session.insights) allInsights.push(session.insights);
+    });
+    const hostIds = new Set(hosts.map((host) => host.id));
+    Object.entries(hostUsageMap).forEach(([hostId, usage]) => {
+      if (hostIds.has(hostId)) allInsights.push(usage);
+    });
+
+    allInsights.forEach((insights) => {
       const polled = insights.meta?.lastPolled ?? 0;
 
       if (insights.claude && polled > claudePolled) {
@@ -207,13 +215,57 @@ export default function SessionsScreen() {
     });
 
     return { claude, codex, copilot };
-  }, [sessions]);
+  }, [hosts, sessions, hostUsageMap]);
 
   const usageVisibility = preferences.usageCards;
   const hasUsageCards =
     (usageVisibility.claude && aggregatedUsage.claude) ||
     (usageVisibility.codex && aggregatedUsage.codex) ||
     (usageVisibility.copilot && aggregatedUsage.copilot);
+
+  const refreshUsage = useCallback(async () => {
+    if (hosts.length === 0) {
+      setHostUsageMap({});
+      return;
+    }
+
+    const results = await Promise.all(
+      hosts.map(async (host) => {
+        try {
+          const usage = await getUsage(host);
+          return { id: host.id, usage };
+        } catch {
+          return { id: host.id, usage: null };
+        }
+      })
+    );
+
+    setHostUsageMap((prev) => {
+      const hostIds = new Set(hosts.map((host) => host.id));
+      const next: Record<string, SessionInsights> = {};
+      Object.keys(prev).forEach((id) => {
+        if (hostIds.has(id)) next[id] = prev[id];
+      });
+      results.forEach(({ id, usage }) => {
+        if (usage) next[id] = usage;
+      });
+      return next;
+    });
+  }, [hosts]);
+
+  const needsUsageFallback = useMemo(() => {
+    if (hosts.length === 0) return false;
+    return (
+      (usageVisibility.claude && !aggregatedUsage.claude) ||
+      (usageVisibility.codex && !aggregatedUsage.codex) ||
+      (usageVisibility.copilot && !aggregatedUsage.copilot)
+    );
+  }, [hosts.length, usageVisibility, aggregatedUsage]);
+
+  useEffect(() => {
+    if (!needsUsageFallback) return;
+    void refreshUsage();
+  }, [needsUsageFallback, refreshUsage]);
 
   const handleKillSession = useCallback(
     (host: Host, sessionName: string) => {
@@ -297,6 +349,7 @@ export default function SessionsScreen() {
               onRefresh={async () => {
                 setIsManualRefresh(true);
                 refreshAll();
+                void refreshUsage();
                 setTimeout(() => setIsManualRefresh(false), 600);
               }}
               tintColor={systemColors.blue as string}
