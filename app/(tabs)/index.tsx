@@ -1,12 +1,13 @@
 import { AppText } from '@/components/AppText';
 import { FadeIn } from '@/components/FadeIn';
 import { Card } from '@/components/Card';
+import { SwipeableRow } from '@/components/SwipeableRow';
 import { PlusIcon, ServerIcon, TerminalIcon } from '@/components/icons/HomeIcons';
 import { ProviderIcon, providerColors } from '@/components/icons/ProviderIcons';
 import { useLaunchSheet } from '@/lib/launch-sheet';
 import { Screen } from '@/components/Screen';
 import { SkeletonList } from '@/components/Skeleton';
-import { getUsage, killSession } from '@/lib/api';
+import { getUsage, killSession, renameSession } from '@/lib/api';
 import { hostColors, systemColors } from '@/lib/colors';
 import { useHostsLive } from '@/lib/live';
 import { useTaskLiveUpdates } from '@/lib/task-live-updates';
@@ -15,9 +16,17 @@ import { theme } from '@/lib/theme';
 import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { Host, HostInfo, HostStatus, ProviderUsage, Session, SessionInsights } from '@/lib/types';
 import { useRouter } from 'expo-router';
-import { Cpu, GitBranch, MemoryStick, Plus } from 'lucide-react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { Cpu, GitBranch, MemoryStick, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View, type ColorValue } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 type CompactUsageCardProps = {
   provider: 'claude' | 'codex' | 'copilot';
@@ -168,15 +177,17 @@ type SessionWithHost = Session & { host: Host; hostStatus: HostStatus };
 
 export default function SessionsScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { hosts, ready, preferences } = useStore();
   const [isManualRefresh, setIsManualRefresh] = useState(false);
   const { open: openLaunchSheet } = useLaunchSheet();
+  const isFocused = useIsFocused();
 
   const { stateMap, refreshAll, refreshHost } = useHostsLive(hosts, {
     sessions: true,
-    insights: true,
-    host: true,
+    insights: isFocused,
+    host: isFocused,
+    enabled: isFocused,
   });
   const [hostUsageMap, setHostUsageMap] = useState<Record<string, SessionInsights>>({});
 
@@ -207,7 +218,7 @@ export default function SessionsScreen() {
     );
   const isBooting = !ready;
 
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   // Aggregate usage from all sessions (take most recent per provider)
   const aggregatedUsage = useMemo(() => {
@@ -293,9 +304,9 @@ export default function SessionsScreen() {
   }, [hosts.length, usageVisibility, aggregatedUsage]);
 
   useEffect(() => {
-    if (!needsUsageFallback) return;
+    if (!needsUsageFallback || !isFocused) return;
     void refreshUsage();
-  }, [needsUsageFallback, refreshUsage]);
+  }, [needsUsageFallback, refreshUsage, isFocused]);
 
   const handleKillSession = useCallback(
     (host: Host, sessionName: string) => {
@@ -317,6 +328,34 @@ export default function SessionsScreen() {
           },
         },
       ]);
+    },
+    [refreshHost]
+  );
+
+  const handleRenameStart = useCallback(
+    (host: Host, sessionName: string) => {
+      Alert.prompt(
+        'Rename Session',
+        `Enter a new name for "${sessionName}"`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Rename',
+            onPress: async (newName: string | undefined) => {
+              const trimmed = newName?.trim();
+              if (!trimmed || trimmed === sessionName) return;
+              try {
+                await renameSession(host, sessionName, trimmed);
+                refreshHost(host.id);
+              } catch (err) {
+                Alert.alert('Rename failed', err instanceof Error ? err.message : 'Unable to rename session.');
+              }
+            },
+          },
+        ],
+        'plain-text',
+        sessionName
+      );
     },
     [refreshHost]
   );
@@ -488,46 +527,61 @@ export default function SessionsScreen() {
                           const isLast = sessionIndex === group.sessions.length - 1;
 
                           return (
-                            <Pressable
+                            <SwipeableRow
                               key={session.name}
-                              onPress={() =>
-                                router.push(
-                                  `/session/${group.host.id}/${encodeURIComponent(session.name)}/terminal`
-                                )
-                              }
-                              onLongPress={() => handleKillSession(group.host, session.name)}
-                              style={({ pressed }) => [
-                                styles.sessionRow,
-                                !isLast && styles.sessionRowBorder,
-                                pressed && styles.sessionRowPressed,
-                              ]}
+                              onRightAction={() => handleKillSession(group.host, session.name)}
+                              rightActionIcon={<Trash2 size={20} color="#FFFFFF" />}
+                              rightActionColor={systemColors.red}
+                              onLeftAction={() => handleRenameStart(group.host, session.name)}
+                              leftActionIcon={<Pencil size={20} color="#FFFFFF" />}
+                              leftActionColor={systemColors.blue}
                             >
-                              <View style={styles.sessionRowContent}>
-                                <View style={[
-                                  styles.stateDot,
-                                  isRunning && styles.stateDotRunning,
-                                  isIdle && styles.stateDotIdle,
-                                ]} />
-                                <View style={styles.sessionTextContent}>
-                                  <AppText variant="body" numberOfLines={1} style={styles.sessionName}>
-                                    {session.name}
-                                  </AppText>
-                                  {command && (
-                                    <AppText variant="mono" tone="muted" numberOfLines={1} style={styles.sessionMeta}>
-                                      {command}
+                              <Pressable
+                                onPress={() =>
+                                  router.push(
+                                    `/session/${group.host.id}/${encodeURIComponent(session.name)}/terminal`
+                                  )
+                                }
+                                style={({ pressed }) => [
+                                  styles.sessionRow,
+                                  !isLast && styles.sessionRowBorder,
+                                  pressed && styles.sessionRowPressed,
+                                ]}
+                              >
+                                <View style={styles.sessionRowContent}>
+                                  <View
+                                    style={[
+                                      styles.stateDot,
+                                      isRunning && styles.stateDotRunning,
+                                      isIdle && styles.stateDotIdle,
+                                    ]}
+                                  />
+                                  <View style={styles.sessionTextContent}>
+                                    <AppText variant="body" numberOfLines={1} style={styles.sessionName}>
+                                      {session.name}
                                     </AppText>
+                                    {command && (
+                                      <AppText
+                                        variant="mono"
+                                        tone="muted"
+                                        numberOfLines={1}
+                                        style={styles.sessionMeta}
+                                      >
+                                        {command}
+                                      </AppText>
+                                    )}
+                                  </View>
+                                  {gitBranch && (
+                                    <View style={styles.gitPill}>
+                                      <GitBranch size={10} color={colors.textMuted} />
+                                      <AppText variant="mono" tone="muted" style={styles.gitPillText}>
+                                        {gitBranch}
+                                      </AppText>
+                                    </View>
                                   )}
                                 </View>
-                                {gitBranch && (
-                                  <View style={styles.gitPill}>
-                                    <GitBranch size={10} color={colors.textMuted} />
-                                    <AppText variant="mono" tone="muted" style={styles.gitPillText}>
-                                      {gitBranch}
-                                    </AppText>
-                                  </View>
-                                )}
-                              </View>
-                            </Pressable>
+                              </Pressable>
+                            </SwipeableRow>
                           );
                         })}
                       </View>
@@ -543,7 +597,8 @@ export default function SessionsScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, _isDark: boolean) => {
+  return StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -750,4 +805,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   gitPillText: {
     fontSize: 10,
   },
-});
+  });
+};

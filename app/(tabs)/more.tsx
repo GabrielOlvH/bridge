@@ -229,6 +229,14 @@ export default function MoreTabScreen() {
           />
           <View style={styles.separator} />
           <MenuItem
+            title="Snippets"
+            subtitle="Global commands to reuse anywhere"
+            onPress={() => router.push('/snippets')}
+            styles={styles}
+            chevronColor={colors.textSecondary}
+          />
+          <View style={styles.separator} />
+          <MenuItem
             title="Ports"
             subtitle="View and manage active ports"
             onPress={() => router.push('/ports')}

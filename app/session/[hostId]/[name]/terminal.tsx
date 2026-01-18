@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
+  Alert,
   Keyboard,
   Platform,
   Pressable,
@@ -11,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 import {
   ChevronDown,
@@ -21,6 +24,8 @@ import {
   ClipboardPaste,
   Copy,
   ImageIcon,
+  MoreHorizontal,
+  X,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -36,6 +41,7 @@ import Animated, {
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { useStore } from '@/lib/store';
+import { useSnippets } from '@/lib/snippets-store';
 import { useTheme } from '@/lib/useTheme';
 import { useHostLive } from '@/lib/live';
 import { uploadImage } from '@/lib/api';
@@ -66,20 +72,29 @@ type TerminalStyles = {
   webview: ViewStyle;
   helperOverlay: ViewStyle;
   helperBar: ViewStyle;
+  helperRow: ViewStyle;
+  helperScroll: ViewStyle;
+  expandedRow: ViewStyle;
   helperContent: ViewStyle;
   helperKey: ViewStyle;
   helperText: TextStyle;
   doneKey: ViewStyle;
+  expandKey: ViewStyle;
   keyPressed: ViewStyle;
 };
 
-const helperKeys: HelperKey[] = [
+const TERMINAL_HTML_VERSION = 'v2';
+
+const mainHelperKeys: HelperKey[] = [
   { label: 'Esc', data: '\u001b' },
   { label: 'Tab', data: '\t' },
   { label: 'Up', data: '\u001b[A', icon: ChevronUp },
   { label: 'Down', data: '\u001b[B', icon: ChevronDown },
   { label: 'Left', data: '\u001b[D', icon: ChevronLeft },
   { label: 'Right', data: '\u001b[C', icon: ChevronRight },
+];
+
+const expandedHelperKeys: HelperKey[] = [
   { label: 'PgUp', data: '\u001b[5~' },
   { label: 'PgDn', data: '\u001b[6~' },
 ];
@@ -115,19 +130,17 @@ function buildTerminalHtml(
     <div id="terminal"></div>
     <script src="https://unpkg.com/xterm/lib/xterm.js"></script>
     <script src="https://unpkg.com/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
-    <script src="https://unpkg.com/xterm-addon-webgl/lib/xterm-addon-webgl.js"></script>
     <script>
       const term = new Terminal({
         cursorBlink: true,
         fontFamily: 'JetBrainsMono, Menlo, monospace',
         fontSize: 12,
         allowProposedApi: true,
+        rendererType: 'canvas',
         theme: { background: '${background}', foreground: '${foreground}', cursor: '${cursor}' },
       });
       const fitAddon = new FitAddon.FitAddon();
-      const webglAddon = new WebglAddon.WebglAddon();
       term.loadAddon(fitAddon);
-      term.loadAddon(webglAddon);
       term.open(document.getElementById('terminal'));
 
       let socket = null;
@@ -136,6 +149,64 @@ function buildTerminalHtml(
       let fitScheduled = false;
       let lastCols = 0;
       let lastRows = 0;
+      let outputBuffer = '';
+      let outputScheduled = false;
+      let inputBuffer = '';
+      let inputScheduled = false;
+
+      function scheduleMicrotask(fn) {
+        if (typeof queueMicrotask === 'function') {
+          queueMicrotask(fn);
+          return;
+        }
+        Promise.resolve().then(fn);
+      }
+
+      function flushOutput() {
+        if (!outputBuffer) return;
+        const chunk = outputBuffer;
+        outputBuffer = '';
+        term.write(chunk, () => {
+          if (socket?.readyState === 1) {
+            socket.send(JSON.stringify({ type: 'ack', bytes: chunk.length }));
+          }
+        });
+      }
+
+      function queueOutput(data) {
+        outputBuffer += data;
+        if (outputScheduled) return;
+        outputScheduled = true;
+        scheduleMicrotask(() => {
+          outputScheduled = false;
+          flushOutput();
+        });
+      }
+
+      function flushInput() {
+        if (!inputBuffer) return;
+        const chunk = inputBuffer;
+        inputBuffer = '';
+        if (socket?.readyState === 1) {
+          socket.send(JSON.stringify({ type: 'input', data: chunk }));
+        }
+      }
+
+      function queueInput(data) {
+        if (!data) return;
+        if (socket?.readyState === 1 && data.length <= 1 && !inputScheduled && !inputBuffer) {
+          socket.send(JSON.stringify({ type: 'input', data }));
+          return;
+        }
+        inputBuffer += data;
+        if (inputScheduled) return;
+        inputScheduled = true;
+        scheduleMicrotask(() => {
+          inputScheduled = false;
+          flushInput();
+        });
+      }
+
 
       function sendToRN(payload) {
         if (window.ReactNativeWebView) {
@@ -169,13 +240,17 @@ function buildTerminalHtml(
         socket = new WebSocket('${wsUrl}');
         socket.onopen = () => {
           sendToRN({ type: 'status', state: 'connected' });
+          flushInput();
           if (hasFitted) {
             sendResize();
           } else {
             setTimeout(scheduleFit, 50);
           }
         };
-        socket.onmessage = (event) => term.write(event.data);
+        socket.onmessage = (event) => {
+          const data = typeof event.data === 'string' ? event.data : String(event.data);
+          if (data) queueOutput(data);
+        };
         socket.onclose = () => {
           sendToRN({ type: 'status', state: 'disconnected' });
           if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -185,15 +260,11 @@ function buildTerminalHtml(
       }
 
       term.onData((data) => {
-        if (socket?.readyState === 1) {
-          socket.send(JSON.stringify({ type: 'input', data }));
-        }
+        queueInput(data);
       });
 
       window.__sendToTerminal = (data) => {
-        if (socket?.readyState === 1) {
-          socket.send(JSON.stringify({ type: 'input', data }));
-        }
+        queueInput(data);
       };
       window.__focusTerminal = () => term.focus();
       window.__blurTerminal = () => term.blur();
@@ -346,13 +417,16 @@ export default function SessionTerminalScreen(): React.ReactElement {
   const params = useLocalSearchParams<{ hostId: string; name: string }>();
   const initialSessionName = decodeURIComponent(params.name ?? '');
   const { hosts } = useStore();
+  const { snippets } = useSnippets();
   const host = hosts.find((item) => item.id === params.hostId);
+  const isFocused = useIsFocused();
   const { width: screenWidth } = useWindowDimensions();
 
   const [currentSessionName, setCurrentSessionName] = useState(initialSessionName);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [helperHeight, setHelperHeight] = useState(0);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isAccessoryExpanded, setIsAccessoryExpanded] = useState(false);
   const webRefs = useRef<Record<string, WebView | null>>({});
   const sourceCache = useRef<Record<string, SourceCacheEntry>>({});
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -366,7 +440,7 @@ export default function SessionTerminalScreen(): React.ReactElement {
   );
   const previousSessionRef = useRef<string | null>(null);
 
-  const { state, refresh } = useHostLive(host, { sessions: true });
+  const { state, refresh } = useHostLive(host, { sessions: true, enabled: isFocused });
   const sessions = state?.sessions ?? [];
   const sessionCount = sessions.length;
   const initialIndex = sessions.findIndex((session) => session.name === initialSessionName);
@@ -381,7 +455,7 @@ export default function SessionTerminalScreen(): React.ReactElement {
       if (!host) return undefined;
       const wsUrl = buildWsUrl(host, sessionName);
       if (!wsUrl) return undefined;
-      const cacheKey = `${wsUrl}|${themeKey}`;
+      const cacheKey = `${wsUrl}|${themeKey}|${TERMINAL_HTML_VERSION}`;
       const cached = sourceCache.current[sessionName];
       if (!cached || cached.key !== cacheKey) {
         sourceCache.current[sessionName] = {
@@ -432,11 +506,75 @@ export default function SessionTerminalScreen(): React.ReactElement {
     );
   }, [currentSessionName]);
 
+  const uploadPickedImage = useCallback(
+    async (result: ImagePicker.ImagePickerResult) => {
+      const asset = result.assets?.[0];
+      const base64 = asset?.base64;
+      if (result.canceled || !base64 || !host) return;
+      try {
+        const mimeType = asset.mimeType ?? 'image/jpeg';
+        const { path } = await uploadImage(host, base64, mimeType);
+        sendToTerminal(path + ' ');
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    },
+    [host, sendToTerminal]
+  );
+
+  const pickFromLibrary = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 0.8,
+    });
+    await uploadPickedImage(result);
+  }, [uploadPickedImage]);
+
+  const takePhoto = useCallback(async () => {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 0.8,
+    });
+    await uploadPickedImage(result);
+  }, [uploadPickedImage]);
+
+  const handleInsertImage = useCallback(() => {
+    const openCamera = () => {
+      void takePhoto();
+    };
+    const openLibrary = () => {
+      void pickFromLibrary();
+    };
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Take Photo', 'Choose Photo', 'Cancel'],
+          cancelButtonIndex: 2,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) openCamera();
+          if (buttonIndex === 1) openLibrary();
+        }
+      );
+      return;
+    }
+
+    Alert.alert('Insert Image', 'Select a source', [
+      { text: 'Take Photo', onPress: openCamera },
+      { text: 'Choose Photo', onPress: openLibrary },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [pickFromLibrary, takePhoto]);
+
   const focusTerminal = useCallback((sessionName: string) => {
     webRefs.current[sessionName]?.injectJavaScript(
       'window.__focusTerminal && window.__focusTerminal(); true;'
     );
   }, []);
+
 
   // Animation state - cumulative offset, never resets
   const offsetX = useSharedValue(initialIndex >= 0 ? -initialIndex * screenWidth : 0);
@@ -518,6 +656,7 @@ export default function SessionTerminalScreen(): React.ReactElement {
     }
     previousSessionRef.current = currentSessionName;
   }, [currentSessionName, focusTerminal, keyboardInset]);
+
 
   if (!host) {
     return (
@@ -630,48 +769,20 @@ export default function SessionTerminalScreen(): React.ReactElement {
       {keyboardInset > 0 && (
         <View style={[styles.helperOverlay, { bottom: keyboardInset }]}>
           <View style={styles.helperBar} onLayout={(e) => setHelperHeight(e.nativeEvent.layout.height)}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.helperContent}>
+            <ScrollView
+              horizontal
+              directionalLockEnabled
+              alwaysBounceVertical={false}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.helperContent}
+            >
               <Pressable
                 style={({ pressed }) => [styles.doneKey, pressed && styles.keyPressed]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); blurTerminal(); }}
               >
                 <ChevronDown size={16} color={colors.terminalForeground} />
               </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
-                onPress={async () => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  const text = await Clipboard.getStringAsync();
-                  if (text) sendToTerminal(text);
-                }}
-              >
-                <ClipboardPaste size={16} color={colors.terminalForeground} />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
-                onPress={async () => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  const result = await ImagePicker.launchImageLibraryAsync({
-                    mediaTypes: ['images'],
-                    base64: true,
-                    quality: 0.8,
-                  });
-                  const asset = result.assets?.[0];
-                  const base64 = asset?.base64;
-                  if (!result.canceled && base64 && host) {
-                    try {
-                      const mimeType = asset.mimeType ?? 'image/jpeg';
-                      const { path } = await uploadImage(host, base64, mimeType);
-                      sendToTerminal(path + ' ');
-                    } catch (err) {
-                      console.error('Upload failed:', err);
-                    }
-                  }
-                }}
-              >
-                <ImageIcon size={16} color={colors.terminalForeground} />
-              </Pressable>
-              {helperKeys.map((item) => (
+              {mainHelperKeys.map((item) => (
                 <Pressable
                   key={item.label}
                   style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
@@ -680,7 +791,61 @@ export default function SessionTerminalScreen(): React.ReactElement {
                   {item.icon ? <item.icon size={16} color={colors.terminalForeground} /> : <AppText variant="caps" style={styles.helperText}>{item.label}</AppText>}
                 </Pressable>
               ))}
+              <Pressable
+                style={({ pressed }) => [isAccessoryExpanded ? styles.doneKey : styles.helperKey, pressed && styles.keyPressed]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setIsAccessoryExpanded(!isAccessoryExpanded); }}
+              >
+                {isAccessoryExpanded ? <X size={16} color={colors.terminalForeground} /> : <MoreHorizontal size={16} color={colors.terminalForeground} />}
+              </Pressable>
             </ScrollView>
+            {isAccessoryExpanded && (
+              <ScrollView
+                horizontal
+                directionalLockEnabled
+                alwaysBounceVertical={false}
+                showsHorizontalScrollIndicator={false}
+                style={styles.expandedRow}
+                contentContainerStyle={styles.helperContent}
+              >
+                <Pressable
+                  style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
+                  onPress={async () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const text = await Clipboard.getStringAsync();
+                    if (text) sendToTerminal(text);
+                  }}
+                >
+                  <ClipboardPaste size={16} color={colors.terminalForeground} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handleInsertImage();
+                  }}
+                >
+                  <ImageIcon size={16} color={colors.terminalForeground} />
+                </Pressable>
+                {expandedHelperKeys.map((item) => (
+                  <Pressable
+                    key={item.label}
+                    style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); sendToTerminal(item.data); }}
+                  >
+                    {item.icon ? <item.icon size={16} color={colors.terminalForeground} /> : <AppText variant="caps" style={styles.helperText}>{item.label}</AppText>}
+                  </Pressable>
+                ))}
+                {snippets.map((snippet) => (
+                  <Pressable
+                    key={snippet.id}
+                    style={({ pressed }) => [styles.helperKey, pressed && styles.keyPressed]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); sendToTerminal(snippet.command); }}
+                  >
+                    <AppText variant="caps" style={styles.helperText}>{snippet.label}</AppText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
           </View>
         </View>
       )}
@@ -772,6 +937,16 @@ function createStyles(colors: ThemeColors): TerminalStyles {
       borderTopColor: colors.terminalBorder,
       paddingVertical: 8,
     },
+    helperRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    helperScroll: {
+      flex: 1,
+    },
+    expandedRow: {
+      marginTop: 8,
+    },
     helperContent: {
       paddingHorizontal: 12,
       gap: 8,
@@ -792,6 +967,13 @@ function createStyles(colors: ThemeColors): TerminalStyles {
       paddingVertical: 6,
       borderRadius: 10,
       backgroundColor: colors.terminalBorder,
+    },
+    expandKey: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 10,
+      backgroundColor: colors.terminalBorder,
+      marginRight: 12,
     },
     keyPressed: {
       backgroundColor: colors.cardPressed,

@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, Pressable, ScrollView, Alert, Modal } from 'react-native';
+import { View, StyleSheet, Pressable, ScrollView, Alert, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
-import { Field } from '@/components/Field';
+import { Card } from '@/components/Card';
 import { DirectoryBrowser } from '@/components/DirectoryBrowser';
 import { useStore } from '@/lib/store';
 import { useProjects } from '@/lib/projects-store';
@@ -64,104 +64,121 @@ export default function NewProjectScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
-          <AppText variant="subtitle">Back</AppText>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <AppText variant="label" style={styles.backText}>Cancel</AppText>
         </Pressable>
-        <View>
-          <AppText variant="caps" tone="muted">
-            New Project
-          </AppText>
-          <AppText variant="title">Add a project</AppText>
-        </View>
+        <AppText variant="subtitle" style={styles.headerTitle}>New Project</AppText>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Host Selection */}
         <View style={styles.section}>
           <AppText variant="caps" tone="muted" style={styles.sectionLabel}>
-            Select Host
+            Host
           </AppText>
-          <View style={styles.hostGrid}>
-            {hosts.map((host, idx) => (
-              <Pressable
-                key={host.id}
-                style={[
-                  styles.hostCard,
-                  selectedHostId === host.id && styles.hostCardSelected,
-                ]}
-                onPress={() => setSelectedHostId(host.id)}
-              >
-                <View
-                  style={[
-                    styles.hostDot,
-                    { backgroundColor: host.color || hostColors[idx % hostColors.length] },
-                  ]}
-                />
-                <AppText
-                  variant="label"
-                  style={selectedHostId === host.id ? styles.hostTextSelected : undefined}
-                >
-                  {host.name}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
-          {hosts.length === 0 && (
-            <View style={styles.emptyState}>
-              <AppText variant="body" tone="muted">
-                No hosts configured
+          {hosts.length === 0 ? (
+            <Card style={styles.emptyCard}>
+              <AppText variant="body" tone="muted" style={styles.emptyText}>
+                No hosts configured yet
               </AppText>
-              <Pressable style={styles.addHostButton} onPress={() => router.push('/hosts/new')}>
-                <AppText variant="label" style={styles.addHostButtonText}>
+              <Pressable style={styles.linkButton} onPress={() => router.push('/hosts/new')}>
+                <AppText variant="label" style={styles.linkButtonText}>
                   Add Host First
                 </AppText>
               </Pressable>
+            </Card>
+          ) : (
+            <View style={styles.hostList}>
+              {hosts.map((host, idx) => {
+                const isSelected = selectedHostId === host.id;
+                const hostColor = host.color || hostColors[idx % hostColors.length];
+                return (
+                  <Pressable
+                    key={host.id}
+                    style={[
+                      styles.hostItem,
+                      isSelected && styles.hostItemSelected,
+                      isSelected && { borderColor: hostColor },
+                    ]}
+                    onPress={() => setSelectedHostId(host.id)}
+                  >
+                    <View style={[styles.hostDot, { backgroundColor: hostColor }]} />
+                    <View style={styles.hostInfo}>
+                      <AppText variant="subtitle" style={isSelected ? styles.hostNameSelected : undefined}>
+                        {host.name}
+                      </AppText>
+                      <AppText variant="caps" tone="muted" numberOfLines={1}>
+                        {host.baseUrl}
+                      </AppText>
+                    </View>
+                    {isSelected && (
+                      <View style={[styles.checkmark, { backgroundColor: hostColor }]}>
+                        <AppText variant="caps" style={styles.checkmarkText}>✓</AppText>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
 
-        <Field
-          label="Project Name"
-          placeholder="e.g., my-app"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <View style={styles.pathSection}>
-          <AppText variant="label" style={styles.pathLabel}>
-            Path on Host
+        {/* Project Details */}
+        <View style={styles.section}>
+          <AppText variant="caps" tone="muted" style={styles.sectionLabel}>
+            Project Details
           </AppText>
-          <View style={styles.pathRow}>
-            <View style={styles.pathInputWrapper}>
-              <Field
-                label=""
-                placeholder="e.g., /home/user/projects/my-app"
+          <Card style={styles.formCard}>
+            <View style={styles.inputGroup}>
+              <AppText variant="label" style={styles.inputLabel}>Name</AppText>
+              <TextInput
+                style={styles.input}
+                placeholder="my-project"
+                placeholderTextColor={colors.textMuted}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.inputGroup}>
+              <View style={styles.inputLabelRow}>
+                <AppText variant="label" style={styles.inputLabel}>Path on Host</AppText>
+                <Pressable
+                  style={[styles.browseChip, !selectedHostId && styles.browseChipDisabled]}
+                  onPress={() => setShowBrowser(true)}
+                  disabled={!selectedHostId}
+                >
+                  <AppText
+                    variant="caps"
+                    style={selectedHostId ? styles.browseChipText : styles.browseChipTextDisabled}
+                  >
+                    Browse
+                  </AppText>
+                </Pressable>
+              </View>
+              <TextInput
+                style={[styles.input, styles.monoInput]}
+                placeholder="/home/user/projects/my-project"
+                placeholderTextColor={colors.textMuted}
                 value={path}
                 onChangeText={setPath}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
             </View>
-            <Pressable
-              style={[styles.browseButton, !selectedHostId && styles.browseButtonDisabled]}
-              onPress={() => setShowBrowser(true)}
-              disabled={!selectedHostId}
-            >
-              <AppText
-                variant="label"
-                style={selectedHostId ? styles.browseButtonText : styles.browseButtonTextDisabled}
-              >
-                Browse
-              </AppText>
-            </Pressable>
-          </View>
+          </Card>
         </View>
 
-        <AppText variant="body" tone="muted" style={styles.hint}>
-          Select a host to browse directories, or enter the path manually.
-        </AppText>
-
+        {/* Submit */}
         <Pressable
           style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
           onPress={handleSubmit}
@@ -197,102 +214,153 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: theme.spacing.sm,
+    justifyContent: 'space-between',
+    paddingBottom: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
+    marginBottom: theme.spacing.lg,
   },
-  back: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+  backButton: {
+    paddingVertical: 4,
+    paddingRight: theme.spacing.sm,
+  },
+  backText: {
+    color: colors.blue,
+  },
+  headerTitle: {
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 50,
   },
   scrollContent: {
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl,
   },
   section: {
     marginBottom: theme.spacing.lg,
   },
   sectionLabel: {
     marginBottom: theme.spacing.sm,
+    marginLeft: 4,
   },
-  hostGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+
+  // Host Selection
+  hostList: {
     gap: theme.spacing.sm,
   },
-  hostCard: {
+  hostItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: theme.radii.md,
-    backgroundColor: colors.cardPressed,
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: theme.radii.lg,
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  hostCardSelected: {
-    backgroundColor: colors.barBg,
-    borderColor: colors.accent,
+  hostItemSelected: {
+    backgroundColor: colors.card,
   },
   hostDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  hostTextSelected: {
-    color: colors.text,
+  hostInfo: {
+    flex: 1,
+    gap: 2,
   },
-  emptyState: {
+  hostNameSelected: {
+    fontWeight: '600',
+  },
+  checkmark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmarkText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyCard: {
     padding: theme.spacing.lg,
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
   },
-  addHostButton: {
+  emptyText: {
+    textAlign: 'center',
+  },
+  linkButton: {
     backgroundColor: colors.accent,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.radii.md,
   },
-  addHostButtonText: {
+  linkButtonText: {
     color: colors.accentText,
   },
-  pathSection: {
-    marginBottom: theme.spacing.sm,
+
+  // Form Card
+  formCard: {
+    padding: 0,
+    overflow: 'hidden',
   },
-  pathLabel: {
-    marginBottom: 6,
+  inputGroup: {
+    padding: theme.spacing.md,
   },
-  pathRow: {
+  inputLabelRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xs,
   },
-  pathInputWrapper: {
-    flex: 1,
+  inputLabel: {
+    marginBottom: theme.spacing.xs,
   },
-  browseButton: {
+  input: {
+    fontSize: 16,
+    fontFamily: 'SpaceGrotesk_400Regular',
+    color: colors.text,
+    paddingVertical: 8,
+    backgroundColor: colors.cardPressed,
+    borderRadius: theme.radii.sm,
+    paddingHorizontal: 12,
+  },
+  monoInput: {
+    fontFamily: 'JetBrainsMono_400Regular',
+    fontSize: 14,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.separator,
+    marginHorizontal: theme.spacing.md,
+  },
+  browseChip: {
     backgroundColor: colors.accent,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 12,
-    borderRadius: theme.radii.md,
-    marginTop: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radii.sm,
   },
-  browseButtonDisabled: {
+  browseChipDisabled: {
     backgroundColor: colors.separator,
   },
-  browseButtonText: {
+  browseChipText: {
     color: colors.accentText,
   },
-  browseButtonTextDisabled: {
+  browseChipTextDisabled: {
     color: colors.textMuted,
   },
-  hint: {
-    marginBottom: theme.spacing.lg,
-  },
+
+  // Submit
   submitButton: {
     backgroundColor: colors.accent,
     paddingVertical: 16,
-    borderRadius: theme.radii.md,
+    borderRadius: theme.radii.lg,
     alignItems: 'center',
+    marginTop: theme.spacing.sm,
   },
   submitButtonDisabled: {
     backgroundColor: colors.separator,
@@ -300,6 +368,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   submitButtonText: {
     color: colors.accentText,
   },
+
+  // Browser Modal
   browserModal: {
     flex: 1,
     backgroundColor: colors.background,

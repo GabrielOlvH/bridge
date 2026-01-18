@@ -1,5 +1,5 @@
-import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Alert,
@@ -14,7 +14,6 @@ import { AppText } from '@/components/AppText';
 import { FadeIn } from '@/components/FadeIn';
 import { Screen } from '@/components/Screen';
 import { killSession, renameSession } from '@/lib/api';
-import { buildAttachCommand, buildNewAttachCommand } from '@/lib/commands';
 import { useHostLive } from '@/lib/live';
 import { useStore } from '@/lib/store';
 import { theme } from '@/lib/theme';
@@ -28,9 +27,9 @@ export default function SessionDetailScreen() {
   const { hosts, updateHostLastSeen } = useStore();
   const host = hosts.find((item) => item.id === params.hostId);
   const [rename, setRename] = useState('');
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const isFocused = useIsFocused();
 
-  const { state, refresh } = useHostLive(host, { sessions: true });
+  const { state, refresh } = useHostLive(host, { sessions: true, enabled: isFocused });
   const session = state?.sessions?.find((item) => item.name === sessionName) ?? null;
   const status = state?.status ?? 'unknown';
 
@@ -43,15 +42,6 @@ export default function SessionDetailScreen() {
   const isOnline = status === 'online';
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
-
-  const attachCommand = host ? buildAttachCommand(host, sessionName) : '';
-  const newAttachCommand = host ? buildNewAttachCommand(host, sessionName) : '';
-
-  const handleCopy = useCallback(async (command: string) => {
-    await Clipboard.setStringAsync(command);
-    setFeedback('Copied');
-    setTimeout(() => setFeedback(null), 1400);
-  }, []);
 
   const handleRename = useCallback(async () => {
     if (!host || !rename.trim()) return;
@@ -117,12 +107,6 @@ export default function SessionDetailScreen() {
         </Pressable>
       </View>
 
-      {feedback && (
-        <View style={styles.feedbackBar}>
-          <AppText variant="caps" style={styles.feedbackText}>{feedback}</AppText>
-        </View>
-      )}
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -178,22 +162,6 @@ export default function SessionDetailScreen() {
         </FadeIn>
 
         <FadeIn delay={100}>
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <AppText variant="subtitle">Attach Commands</AppText>
-            </View>
-            <Pressable style={styles.commandRow} onPress={() => handleCopy(attachCommand)}>
-              <AppText variant="mono" style={styles.commandText} numberOfLines={1}>{attachCommand}</AppText>
-              <AppText variant="caps" tone="accent">Copy</AppText>
-            </Pressable>
-            <Pressable style={styles.commandRow} onPress={() => handleCopy(newAttachCommand)}>
-              <AppText variant="mono" style={styles.commandText} numberOfLines={1}>{newAttachCommand}</AppText>
-              <AppText variant="caps" tone="accent">Copy</AppText>
-            </Pressable>
-          </View>
-        </FadeIn>
-
-        <FadeIn delay={150}>
           <Pressable style={styles.killButton} onPress={handleKill}>
             <AppText variant="caps" style={styles.killText}>Kill Session</AppText>
           </Pressable>
@@ -240,17 +208,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) => {
   terminalButtonText: {
     color: actionTextColor,
     fontWeight: '600',
-  },
-  feedbackBar: {
-    backgroundColor: colors.barBg,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  feedbackText: {
-    color: colors.accent,
   },
   scrollContent: {
     paddingBottom: theme.spacing.xxl,
@@ -325,22 +282,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) => {
   },
   actionButtonText: {
     color: actionTextColor,
-  },
-  commandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: theme.radii.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-    gap: 10,
-  },
-  commandText: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textSecondary,
   },
   killButton: {
     alignSelf: 'center',

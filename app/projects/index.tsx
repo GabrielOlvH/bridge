@@ -93,25 +93,14 @@ export default function ProjectsScreen() {
 
                   <View style={styles.projectsList}>
                     {hostProjects.map((project) => (
-                      <Pressable
-                        key={project.id}
-                        onPress={() => router.push(`/projects/${project.id}/commands`)}
-                      >
-                        <Card style={styles.projectCard}>
-                          <View style={styles.projectInfo}>
-                            <AppText variant="subtitle">{project.name}</AppText>
-                            <AppText variant="mono" tone="muted" numberOfLines={1}>
-                              {project.path}
-                            </AppText>
-                            {project.customCommands && project.customCommands.length > 0 && (
-                              <AppText variant="caps" tone="muted">
-                                {project.customCommands.length} custom command
-                                {project.customCommands.length !== 1 ? 's' : ''}
-                              </AppText>
-                            )}
-                          </View>
-                        </Card>
-                      </Pressable>
+                      <Card key={project.id} style={styles.projectCard}>
+                        <View style={styles.projectInfo}>
+                          <AppText variant="subtitle">{project.name}</AppText>
+                          <AppText variant="mono" tone="muted" numberOfLines={1}>
+                            {project.path}
+                          </AppText>
+                        </View>
+                      </Card>
                     ))}
                   </View>
                 </View>

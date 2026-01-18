@@ -16,6 +16,8 @@ type SourceCacheEntry = {
   source: WebViewSource;
 };
 
+const TERMINAL_HTML_VERSION = 'probe-v1';
+
 function buildDockerWsUrl(host: { baseUrl: string; authToken?: string }, containerId: string): string {
   try {
     const base = new URL(host.baseUrl);
@@ -52,19 +54,17 @@ function buildTerminalHtml(
     <div id="terminal"></div>
     <script src="https://unpkg.com/xterm/lib/xterm.js"></script>
     <script src="https://unpkg.com/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
-    <script src="https://unpkg.com/xterm-addon-webgl/lib/xterm-addon-webgl.js"></script>
     <script>
       const term = new Terminal({
         cursorBlink: true,
         fontFamily: 'JetBrainsMono, Menlo, monospace',
         fontSize: 12,
         allowProposedApi: true,
+        rendererType: 'canvas',
         theme: { background: '${background}', foreground: '${foreground}', cursor: '${cursor}' },
       });
       const fitAddon = new FitAddon.FitAddon();
-      const webglAddon = new WebglAddon.WebglAddon();
       term.loadAddon(fitAddon);
-      term.loadAddon(webglAddon);
       term.open(document.getElementById('terminal'));
 
       let socket = null;
@@ -72,6 +72,63 @@ function buildTerminalHtml(
       let fitScheduled = false;
       let lastCols = 0;
       let lastRows = 0;
+      let outputBuffer = '';
+      let outputScheduled = false;
+      let inputBuffer = '';
+      let inputScheduled = false;
+
+      function scheduleMicrotask(fn) {
+        if (typeof queueMicrotask === 'function') {
+          queueMicrotask(fn);
+          return;
+        }
+        Promise.resolve().then(fn);
+      }
+
+      function flushOutput() {
+        if (!outputBuffer) return;
+        const chunk = outputBuffer;
+        outputBuffer = '';
+        term.write(chunk, () => {
+          if (socket?.readyState === 1) {
+            socket.send(JSON.stringify({ type: 'ack', bytes: chunk.length }));
+          }
+        });
+      }
+
+      function queueOutput(data) {
+        outputBuffer += data;
+        if (outputScheduled) return;
+        outputScheduled = true;
+        scheduleMicrotask(() => {
+          outputScheduled = false;
+          flushOutput();
+        });
+      }
+
+      function flushInput() {
+        if (!inputBuffer) return;
+        const chunk = inputBuffer;
+        inputBuffer = '';
+        if (socket?.readyState === 1) {
+          socket.send(JSON.stringify({ type: 'input', data: chunk }));
+        }
+      }
+
+      function queueInput(data) {
+        if (!data) return;
+        if (socket?.readyState === 1 && data.length <= 1 && !inputScheduled && !inputBuffer) {
+          socket.send(JSON.stringify({ type: 'input', data }));
+          return;
+        }
+        inputBuffer += data;
+        if (inputScheduled) return;
+        inputScheduled = true;
+        scheduleMicrotask(() => {
+          inputScheduled = false;
+          flushInput();
+        });
+      }
 
       function sendToRN(payload) {
         if (window.ReactNativeWebView) {
@@ -104,19 +161,21 @@ function buildTerminalHtml(
       function connect() {
         socket = new WebSocket('${wsUrl}');
         socket.onopen = () => {
+          flushInput();
           if (hasFitted) {
             sendResize();
           } else {
             setTimeout(scheduleFit, 50);
           }
         };
-        socket.onmessage = (event) => term.write(event.data);
+        socket.onmessage = (event) => {
+          const data = typeof event.data === 'string' ? event.data : String(event.data);
+          if (data) queueOutput(data);
+        };
       }
 
       term.onData((data) => {
-        if (socket?.readyState === 1) {
-          socket.send(JSON.stringify({ type: 'input', data }));
-        }
+        queueInput(data);
       });
 
       window.__fitTerminal = () => { scheduleFit(); };
@@ -238,7 +297,7 @@ export default function DockerTerminalScreen() {
   const sourceCache = useRef<SourceCacheEntry | null>(null);
   const source = useMemo(() => {
     if (!wsUrl) return undefined;
-    const cacheKey = `${wsUrl}|${terminalTheme.background}|${terminalTheme.foreground}|${terminalTheme.cursor}`;
+    const cacheKey = `${wsUrl}|${terminalTheme.background}|${terminalTheme.foreground}|${terminalTheme.cursor}|${TERMINAL_HTML_VERSION}`;
     if (!sourceCache.current || sourceCache.current.key !== cacheKey) {
       sourceCache.current = {
         key: cacheKey,

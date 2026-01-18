@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -14,14 +14,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
-import { navTheme } from '@/lib/theme';
+import { getNavTheme } from '@/lib/theme';
 import { StoreProvider, useStore } from '@/lib/store';
 import { registerNotificationsForHosts, unregisterNotificationsForHosts } from '@/lib/notifications';
 import { ProjectsProvider } from '@/lib/projects-store';
+import { SnippetsProvider } from '@/lib/snippets-store';
 import { QueryProvider } from '@/lib/query';
 import { LaunchSheetProvider, useLaunchSheet } from '@/lib/launch-sheet';
 import { LaunchSheet } from '@/components/LaunchSheet';
-import { ThemeSettingProvider } from '@/lib/useTheme';
+import { ThemeSettingProvider, useTheme } from '@/lib/useTheme';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -82,27 +83,38 @@ function ThemedApp() {
 
   return (
     <ThemeSettingProvider value={preferences.theme}>
-      <ProjectsProvider>
+      <NavigationRoot />
+    </ThemeSettingProvider>
+  );
+}
+
+function NavigationRoot() {
+  const { isDark } = useTheme();
+  const navTheme = useMemo(() => getNavTheme(isDark), [isDark]);
+
+  return (
+    <ProjectsProvider>
+      <SnippetsProvider>
         <LaunchSheetProvider>
           <ThemeProvider value={navTheme}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="session/[hostId]/[name]/terminal" />
-              <Stack.Screen name="hosts/[id]" />
+              <Stack.Screen name="hosts/[id]/index" />
               <Stack.Screen name="hosts/new" />
               <Stack.Screen name="hosts/[id]/edit" />
-              <Stack.Screen name="hosts/[id]/docker/[containerId]" />
-              <Stack.Screen name="projects" />
+              <Stack.Screen name="hosts/[id]/docker/[containerId]/index" />
+              <Stack.Screen name="projects/index" />
               <Stack.Screen name="projects/new" />
-              <Stack.Screen name="projects/[id]/commands" />
-              <Stack.Screen name="ports" />
-              <Stack.Screen name="session/[hostId]/[name]" />
+              <Stack.Screen name="snippets/index" />
+              <Stack.Screen name="ports/index" />
+              <Stack.Screen name="session/[hostId]/[name]/index" />
             </Stack>
             <GlobalLaunchSheet />
           </ThemeProvider>
         </LaunchSheetProvider>
-      </ProjectsProvider>
-    </ThemeSettingProvider>
+      </SnippetsProvider>
+    </ProjectsProvider>
   );
 }
 

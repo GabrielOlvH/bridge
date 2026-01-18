@@ -4,7 +4,6 @@ import { Card } from '@/components/Card';
 import { Pill } from '@/components/Pill';
 import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
-import { stripAnsi } from '@/lib/ansi';
 import { createSession, killSession } from '@/lib/api';
 import { systemColors } from '@/lib/colors';
 import { useHostLive } from '@/lib/live';
@@ -13,6 +12,7 @@ import { theme } from '@/lib/theme';
 import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { HostInfo } from '@/lib/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -67,18 +67,19 @@ export default function HostDetailScreen() {
   const host = hosts.find((item) => item.id === params.id);
   const [newSession, setNewSession] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const isFocused = useIsFocused();
 
   const { state, refresh } = useHostLive(host, {
     sessions: true,
-    preview: true,
-    previewLines: 12,
     host: true,
+    enabled: isFocused,
   });
 
   const sessions = state?.sessions ?? [];
   const status = state?.status ?? 'unknown';
   const error = state?.error ?? null;
   const hostInfo: HostInfo | undefined = state?.hostInfo;
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     if (!host?.id || !state?.lastUpdate) return;
@@ -153,15 +154,6 @@ export default function HostDetailScreen() {
                 <Pill label={session.attached ? 'Attached' : 'Idle'} tone={session.attached ? 'success' : 'neutral'} />
               </View>
             </View>
-            {session.preview && session.preview.length > 0 ? (
-              <View style={styles.previewBox}>
-                {session.preview.slice(-6).map((line, idx) => (
-                  <AppText key={`${session.name}-line-${idx}`} variant="mono" style={styles.previewLine} numberOfLines={1}>
-                    {stripAnsi(line) || ' '}
-                  </AppText>
-                ))}
-              </View>
-            ) : null}
             <View style={styles.sessionFooter}>
               <AppText variant="label" tone="muted">
                 created {formatTimestamp(session.createdAt)}
@@ -176,7 +168,7 @@ export default function HostDetailScreen() {
           </Pressable>
         </FadeIn>
       )),
-    [sessions, router, host, handleKill]
+    [sessions, router, host, handleKill, styles]
   );
 
   if (!host) {
@@ -196,13 +188,11 @@ export default function HostDetailScreen() {
 
   const hostDisplay = (() => {
     try {
-      return host.sshHost || new URL(host.baseUrl).hostname;
+      return new URL(host.baseUrl).hostname;
     } catch {
-      return host.sshHost || host.baseUrl;
+      return host.baseUrl;
     }
   })();
-
-  const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <Screen>
@@ -244,7 +234,6 @@ export default function HostDetailScreen() {
             tone={status === 'online' ? 'success' : status === 'offline' ? 'warning' : 'neutral'}
           />
           <AppText variant="label" tone="muted">
-            {host.connection.toUpperCase()} - {host.username ? `${host.username}@` : ''}
             {hostDisplay}
           </AppText>
         </View>
@@ -512,17 +501,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: theme.spacing.xs,
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  previewBox: {
-    marginTop: theme.spacing.xs,
-    padding: theme.spacing.xs,
-    borderRadius: theme.radii.sm,
-    backgroundColor: colors.terminalBackground,
-  },
-  previewLine: {
-    fontSize: 10,
-    lineHeight: 14,
-    color: colors.terminalMuted,
   },
   emptyCard: {
     padding: 32,

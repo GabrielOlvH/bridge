@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -7,26 +7,30 @@ import { AppText } from '@/components/AppText';
 import { HostForm } from '@/components/HostForm';
 import { useStore } from '@/lib/store';
 import { theme } from '@/lib/theme';
+import { ThemeColors, useTheme } from '@/lib/useTheme';
 
 export default function NewHostScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { upsertHost } = useStore();
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
-          <AppText variant="subtitle">Back</AppText>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <AppText variant="label" style={styles.backText}>Cancel</AppText>
         </Pressable>
-        <View>
-          <AppText variant="caps" tone="muted">
-            New Host
-          </AppText>
-          <AppText variant="title">Add a tmux agent</AppText>
-        </View>
+        <AppText variant="subtitle" style={styles.headerTitle}>New Host</AppText>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <HostForm
           onSubmit={async (draft) => {
             const host = await upsertHost(draft);
@@ -38,16 +42,28 @@ export default function NewHostScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: theme.spacing.sm,
+    justifyContent: 'space-between',
+    paddingBottom: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
+    marginBottom: theme.spacing.lg,
   },
-  back: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+  backButton: {
+    paddingVertical: 4,
+    paddingRight: theme.spacing.sm,
+  },
+  backText: {
+    color: colors.blue,
+  },
+  headerTitle: {
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 50,
   },
   scrollContent: {
     paddingBottom: theme.spacing.xl,

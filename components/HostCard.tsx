@@ -43,6 +43,7 @@ type HostCardProps = {
   metrics?: { cpu?: number; ram?: number };
   updateStatus?: UpdateStatus;
   isUpdating?: boolean;
+  errorMessage?: string;
   onPress: () => void;
   onTerminal: () => void;
   onDocker: () => void;
@@ -107,6 +108,7 @@ export function HostCard({
   metrics,
   updateStatus,
   isUpdating,
+  errorMessage,
   onPress,
   onTerminal,
   onDocker,
@@ -135,7 +137,7 @@ export function HostCard({
               {host.name}
             </AppText>
             <AppText variant="mono" tone="muted" style={styles.hostname} numberOfLines={1}>
-              {host.sshHost || getHostname(host.baseUrl)}
+              {getHostname(host.baseUrl)}
             </AppText>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
@@ -149,6 +151,14 @@ export function HostCard({
             </AppText>
           </View>
         </View>
+
+        {errorMessage ? (
+          <View style={styles.errorRow}>
+            <AppText variant="mono" tone="warning" style={styles.errorText} numberOfLines={2}>
+              {errorMessage}
+            </AppText>
+          </View>
+        ) : null}
 
         <View style={styles.stats}>
           <View style={styles.stat}>
@@ -317,6 +327,13 @@ function createStyles(colors: ThemeColors): HostCardStyles {
     statusText: {
       fontSize: 10,
       fontWeight: '600',
+    },
+    errorRow: {
+      marginTop: -2,
+      marginBottom: 2,
+    },
+    errorText: {
+      fontSize: 11,
     },
     stats: {
       flexDirection: 'row',

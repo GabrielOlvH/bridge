@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, StyleSheet, Pressable, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -35,7 +36,8 @@ export default function DockerContainerScreen() {
   const params = useLocalSearchParams<{ id: string; containerId: string }>();
   const { hosts } = useStore();
   const host = hosts.find((item) => item.id === params.id);
-  const { state, refresh } = useHostLive(host, { docker: true });
+  const isFocused = useIsFocused();
+  const { state, refresh } = useHostLive(host, { docker: true, enabled: isFocused });
   const docker = state?.docker;
   const [busyAction, setBusyAction] = useState<string | null>(null);
 

@@ -22,6 +22,7 @@ import { TerminalIcon } from '@/components/icons/HomeIcons';
 import { hostColors } from '@/lib/colors';
 import { useStore } from '@/lib/store';
 import { useProjects } from '@/lib/projects-store';
+import { useSnippets } from '@/lib/snippets-store';
 import { createSession, fetchProjectScripts, sendText } from '@/lib/api';
 import { Command, PackageJsonScripts } from '@/lib/types';
 import { theme } from '@/lib/theme';
@@ -41,6 +42,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
   const sheetRef = useRef<BottomSheet>(null);
   const { hosts } = useStore();
   const { projects, recentLaunches, addRecentLaunch, getProjectsByHost } = useProjects();
+  const { snippets } = useSnippets();
 
   const [mode, setMode] = useState<LaunchMode>('projects');
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null);
@@ -49,6 +51,23 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
   const [loadingScripts, setLoadingScripts] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [blankSessionName, setBlankSessionName] = useState('');
+
+  // Auto-select host if only 1 available
+  useEffect(() => {
+    if (isOpen && hosts.length === 1 && !selectedHostId) {
+      setSelectedHostId(hosts[0].id);
+    }
+  }, [isOpen, hosts, selectedHostId]);
+
+  // Auto-select project if only 1 available for selected host
+  useEffect(() => {
+    if (isOpen && selectedHostId && mode === 'projects') {
+      const available = getProjectsByHost(selectedHostId);
+      if (available.length === 1 && !selectedProjectId) {
+        setSelectedProjectId(available[0].id);
+      }
+    }
+  }, [isOpen, selectedHostId, mode, getProjectsByHost, selectedProjectId]);
 
   const selectedHost = useMemo(
     () => hosts.find((h) => h.id === selectedHostId) || null,
@@ -102,14 +121,8 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
     };
   }, [selectedHost, selectedProject]);
 
-  const hardcodedCommands: (Command & { providerIcon?: keyof typeof providerIcons })[] = [
-    { id: 'hardcoded-claude', label: 'Claude', command: 'claude --permission-mode bypassPermissions', providerIcon: 'claude' },
-    { id: 'hardcoded-codex', label: 'Codex', command: 'codex --yolo', providerIcon: 'codex' },
-    { id: 'hardcoded-opencode', label: 'OpenCode', command: 'opencode' },
-  ];
-
-  const allCommands = useMemo(() => {
-    const commands: Command[] = [...hardcodedCommands];
+  const projectCommands = useMemo(() => {
+    const commands: Command[] = [];
     Object.entries(packageScripts).forEach(([name]) => {
       commands.push({
         id: `npm-${name}`,
@@ -118,11 +131,8 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
         icon: 'package',
       });
     });
-    if (selectedProject?.customCommands) {
-      commands.push(...selectedProject.customCommands);
-    }
     return commands;
-  }, [packageScripts, selectedProject]);
+  }, [packageScripts]);
 
   const handleLaunch = useCallback(
     async (command: Command) => {
@@ -211,6 +221,29 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
       setBlankSessionName('');
     }
   }, [selectedHost, blankSessionName, launching, onClose, router]);
+
+  const handleBlankSnippetLaunch = useCallback(
+    async (snippet: Command) => {
+      if (!selectedHost || launching) return;
+
+      const sessionName = blankSessionName.trim() || `session-${Date.now().toString(36)}`;
+
+      setLaunching(true);
+      try {
+        await createSession(selectedHost, sessionName);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await sendText(selectedHost, sessionName, `${snippet.command}\n`);
+        onClose();
+        router.push(`/session/${selectedHost.id}/${encodeURIComponent(sessionName)}/terminal`);
+      } catch (err) {
+        console.error('Failed to create blank snippet session:', err);
+      } finally {
+        setLaunching(false);
+        setBlankSessionName('');
+      }
+    },
+    [selectedHost, blankSessionName, launching, onClose, router]
+  );
 
   const handleSheetChange = useCallback((index: number) => {
     if (index === -1) {
@@ -335,6 +368,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                       style={[
                         styles.chipDot,
                         { backgroundColor: host.color || hostColors[idx % hostColors.length] },
+                        selectedHostId === host.id && styles.chipDotSelected,
                       ]}
                     />
                     <AppText
@@ -419,7 +453,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator color={colors.accent} />
                   </View>
-                ) : allCommands.length === 0 ? (
+                ) : projectCommands.length === 0 ? (
                   <View style={styles.emptyState}>
                     <AppText variant="body" tone="muted">
                       No commands available
@@ -427,13 +461,51 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                   </View>
                 ) : (
                   <View style={styles.commandsList}>
-                    {allCommands.map((command) => {
-                      const hc = hardcodedCommands.find((h) => h.id === command.id);
-                      const icon = hc?.providerIcon ? providerIcons[hc.providerIcon] : null;
+                    {projectCommands.map((command) => (
+                      <Pressable
+                        key={command.id}
+                        onPress={() => handleLaunch(command)}
+                        disabled={launching}
+                      >
+                        <Card style={styles.commandCard}>
+                          <View style={styles.commandIcon}>
+                            <TerminalIcon size={14} color={colors.textSecondary} />
+                          </View>
+                          <AppText variant="mono" style={styles.commandText} numberOfLines={1}>
+                            {command.command}
+                          </AppText>
+                          <View style={styles.launchIcon}>
+                            <AppText variant="label" style={styles.launchIconText}>
+                              {launching ? '...' : '>'}
+                            </AppText>
+                          </View>
+                        </Card>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {selectedProject && (
+              <View style={styles.section}>
+                <AppText variant="caps" tone="muted" style={styles.sectionLabel}>
+                  Snippets
+                </AppText>
+                {snippets.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <AppText variant="body" tone="muted">
+                      No snippets available
+                    </AppText>
+                  </View>
+                ) : (
+                  <View style={styles.commandsList}>
+                    {snippets.map((snippet) => {
+                      const icon = snippet.providerIcon ? providerIcons[snippet.providerIcon] : null;
                       return (
                         <Pressable
-                          key={command.id}
-                          onPress={() => handleLaunch(command)}
+                          key={snippet.id}
+                          onPress={() => handleLaunch(snippet)}
                           disabled={launching}
                         >
                           <Card style={styles.commandCard}>
@@ -441,7 +513,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                               {icon || <TerminalIcon size={14} color={colors.textSecondary} />}
                             </View>
                             <AppText variant="mono" style={styles.commandText} numberOfLines={1}>
-                              {command.command}
+                              {snippet.command}
                             </AppText>
                             <View style={styles.launchIcon}>
                               <AppText variant="label" style={styles.launchIconText}>
@@ -486,6 +558,7 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                       style={[
                         styles.chipDot,
                         { backgroundColor: host.color || hostColors[idx % hostColors.length] },
+                        selectedHostId === host.id && styles.chipDotSelected,
                       ]}
                     />
                     <AppText
@@ -516,6 +589,48 @@ export function LaunchSheet({ isOpen, onClose }: LaunchSheetProps) {
                     autoCorrect={false}
                   />
                 </Card>
+              </View>
+            )}
+
+            {selectedHostId && (
+              <View style={styles.section}>
+                <AppText variant="caps" tone="muted" style={styles.sectionLabel}>
+                  Snippets
+                </AppText>
+                {snippets.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <AppText variant="body" tone="muted">
+                      No snippets available
+                    </AppText>
+                  </View>
+                ) : (
+                  <View style={styles.commandsList}>
+                    {snippets.map((snippet) => {
+                      const icon = snippet.providerIcon ? providerIcons[snippet.providerIcon] : null;
+                      return (
+                        <Pressable
+                          key={snippet.id}
+                          onPress={() => handleBlankSnippetLaunch(snippet)}
+                          disabled={launching}
+                        >
+                          <Card style={styles.commandCard}>
+                            <View style={styles.commandIcon}>
+                              {icon || <TerminalIcon size={14} color={colors.textSecondary} />}
+                            </View>
+                            <AppText variant="mono" style={styles.commandText} numberOfLines={1}>
+                              {snippet.command}
+                            </AppText>
+                            <View style={styles.launchIcon}>
+                              <AppText variant="label" style={styles.launchIconText}>
+                                {launching ? '...' : '>'}
+                              </AppText>
+                            </View>
+                          </Card>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             )}
 
@@ -610,18 +725,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: theme.radii.md,
-    backgroundColor: colors.cardPressed,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.separator,
   },
   chipSelected: {
-    backgroundColor: colors.barBg,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   chipDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  chipDotSelected: {
+    borderColor: colors.accentText,
   },
   chipTextSelected: {
-    color: colors.accent,
+    color: colors.accentText,
+    fontWeight: '600',
   },
   emptyState: {
     padding: theme.spacing.lg,

@@ -46,87 +46,62 @@ export function DirectoryBrowser({ host, onSelect, onClose }: DirectoryBrowserPr
     loadDirectory();
   }, [loadDirectory]);
 
-  const handleNavigate = (path: string) => {
-    loadDirectory(path);
-  };
-
-  const handleSelect = (item: DirectoryItem) => {
-    onSelect(item.path, item.name);
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.closeButton} onPress={onClose}>
-          <AppText variant="label">Cancel</AppText>
+        <Pressable onPress={onClose} style={styles.cancelButton}>
+          <AppText variant="label" style={styles.cancelText}>Cancel</AppText>
         </Pressable>
-        <View style={styles.headerTitle}>
-          <AppText variant="caps" tone="muted">
-            Browse on {host.name}
-          </AppText>
-          <AppText variant="label" numberOfLines={1} style={styles.pathText}>
-            {currentPath || '...'}
-          </AppText>
-        </View>
+        <AppText variant="subtitle">Browse</AppText>
+        <View style={styles.headerSpacer} />
       </View>
 
-      {parentPath && (
-        <Pressable style={styles.parentRow} onPress={() => handleNavigate(parentPath)}>
-          <AppText variant="label" style={styles.parentText}>
-            ..
-          </AppText>
-          <AppText variant="caps" tone="muted">
-            Go up
-          </AppText>
-        </Pressable>
-      )}
+      <View style={styles.pathBar}>
+        <AppText variant="mono" numberOfLines={1} style={styles.pathText}>
+          {currentPath || '...'}
+        </AppText>
+      </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.center}>
           <ActivityIndicator color={colors.accent} />
         </View>
       ) : error ? (
-        <View style={styles.errorContainer}>
-          <AppText variant="body" tone="muted">
-            {error}
-          </AppText>
+        <View style={styles.center}>
+          <AppText variant="body" tone="muted">{error}</AppText>
           <Pressable style={styles.retryButton} onPress={() => loadDirectory(currentPath ?? undefined)}>
-            <AppText variant="label" style={styles.retryButtonText}>
-              Retry
-            </AppText>
+            <AppText variant="label" style={styles.retryText}>Retry</AppText>
           </Pressable>
         </View>
       ) : (
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {items.length === 0 ? (
-            <View style={styles.emptyState}>
-              <AppText variant="body" tone="muted">
-                No subdirectories
-              </AppText>
+          {parentPath && (
+            <Pressable style={styles.row} onPress={() => loadDirectory(parentPath)}>
+              <AppText variant="subtitle" style={styles.rowName}>..</AppText>
+            </Pressable>
+          )}
+          {items.length === 0 && !parentPath ? (
+            <View style={styles.center}>
+              <AppText variant="body" tone="muted">No subdirectories</AppText>
             </View>
           ) : (
             items.map((item) => (
-              <View key={item.path} style={styles.itemRow}>
-                <Pressable
-                  style={styles.itemContent}
-                  onPress={() => handleNavigate(item.path)}
-                >
-                  <AppText variant="subtitle">{item.name}</AppText>
+              <View key={item.path} style={styles.row}>
+                <Pressable style={styles.rowMain} onPress={() => loadDirectory(item.path)}>
+                  <AppText variant="subtitle" style={styles.rowName} numberOfLines={1}>
+                    {item.name}
+                  </AppText>
                   {item.hasPackageJson && (
-                    <View style={styles.badge}>
-                      <AppText variant="caps" style={styles.badgeText}>
-                        npm
-                      </AppText>
-                    </View>
+                    <AppText variant="caps" style={styles.badge}>npm</AppText>
                   )}
                 </Pressable>
                 <Pressable
                   style={[styles.selectButton, item.hasPackageJson && styles.selectButtonHighlight]}
-                  onPress={() => handleSelect(item)}
+                  onPress={() => onSelect(item.path, item.name)}
                 >
                   <AppText
                     variant="caps"
-                    style={item.hasPackageJson ? styles.selectButtonTextHighlight : styles.selectButtonText}
+                    style={item.hasPackageJson ? styles.selectTextHighlight : styles.selectText}
                   >
                     Select
                   </AppText>
@@ -143,109 +118,86 @@ export function DirectoryBrowser({ host, onSelect, onClose }: DirectoryBrowserPr
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingBottom: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
-    marginBottom: theme.spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.md,
   },
-  closeButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+  cancelButton: {
+    paddingVertical: 4,
   },
-  headerTitle: {
-    flex: 1,
+  cancelText: {
+    color: colors.blue,
+  },
+  headerSpacer: {
+    width: 50,
+  },
+  pathBar: {
+    backgroundColor: colors.card,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   pathText: {
-    fontFamily: 'JetBrainsMono_500Medium',
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textSecondary,
   },
-  parentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    backgroundColor: colors.cardPressed,
-    borderRadius: theme.radii.sm,
-    marginBottom: theme.spacing.sm,
-  },
-  parentText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  loadingContainer: {
+  center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.xl,
     gap: theme.spacing.md,
   },
   retryButton: {
     backgroundColor: colors.accent,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radii.sm,
   },
-  retryButtonText: {
+  retryText: {
     color: colors.accentText,
   },
   list: {
     flex: 1,
   },
-  emptyState: {
-    padding: theme.spacing.lg,
-    alignItems: 'center',
-  },
-  itemRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.separator,
   },
-  itemContent: {
+  rowMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
   },
+  rowName: {
+    flex: 1,
+  },
   badge: {
+    color: colors.accent,
     backgroundColor: colors.barBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-  },
-  badgeText: {
-    color: colors.accent,
-    fontSize: 9,
+    overflow: 'hidden',
   },
   selectButton: {
-    backgroundColor: colors.cardPressed,
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: theme.radii.sm,
   },
   selectButtonHighlight: {
     backgroundColor: colors.accent,
   },
-  selectButtonText: {
+  selectText: {
     color: colors.textMuted,
   },
-  selectButtonTextHighlight: {
+  selectTextHighlight: {
     color: colors.accentText,
   },
 });

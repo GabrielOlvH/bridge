@@ -10,14 +10,14 @@ import {
   type ColorValue,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Play, Square, Terminal } from 'lucide-react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { Play, Square, Terminal, ChevronDown, ChevronRight } from 'lucide-react-native';
 
 import { Screen } from '@/components/Screen';
 import { AppText } from '@/components/AppText';
 import { FadeIn } from '@/components/FadeIn';
 import { Card } from '@/components/Card';
 import { PulsingDot } from '@/components/PulsingDot';
-import { SectionHeader } from '@/components/SectionHeader';
 import { SkeletonList } from '@/components/Skeleton';
 import { hostColors, systemColors } from '@/lib/colors';
 import {
@@ -32,13 +32,23 @@ import { ThemeColors, useTheme } from '@/lib/useTheme';
 import { Host } from '@/lib/types';
 import { useStore } from '@/lib/store';
 
-type HostFilter = string | null;
+type ComposeGroup = {
+  key: string;
+  title: string;
+  hostName: string;
+  hostColor: string | undefined;
+  containers: ContainerWithHost[];
+  running: number;
+  stopped: number;
+  isStandalone: boolean;
+};
 
 export default function DockerTabScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ hostId?: string }>();
   const { ready } = useStore();
+  const isFocused = useIsFocused();
   const {
     containers,
     running,
@@ -48,40 +58,87 @@ export default function DockerTabScreen() {
     hosts,
     isLoading,
     hasDocker,
-  } = useAllDocker();
+  } = useAllDocker({ enabled: isFocused });
 
   const [manualRefresh, setManualRefresh] = useState(false);
-  const [hostFilter, setHostFilter] = useState<HostFilter>(params.hostId ?? null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const styles = useMemo(() => createStyles(colors), [colors]);
-
-  useEffect(() => {
-    if (params.hostId) {
-      setHostFilter(params.hostId);
-    }
-  }, [params.hostId]);
-
-  const filteredRunning = useMemo(() => {
-    if (!hostFilter) return running;
-    return running.filter((c) => c.host.id === hostFilter);
-  }, [running, hostFilter]);
-
-  const filteredStopped = useMemo(() => {
-    if (!hostFilter) return stopped;
-    return stopped.filter((c) => c.host.id === hostFilter);
-  }, [stopped, hostFilter]);
 
   const hostsWithContainers = useMemo(() => {
     const hostIds = new Set(containers.map((c) => c.host.id));
     return hosts.filter((h) => hostIds.has(h.id));
   }, [hosts, containers]);
 
+  const composeGroups = useMemo(() => {
+    const groups = new Map<string, ComposeGroup>();
+    containers.forEach((container, index) => {
+      const project = container.composeProject?.trim();
+      const isStandalone = !project;
+      const key = `${container.host.id}:${project || 'standalone'}`;
+      const title = project || 'Standalone';
+      const existing = groups.get(key);
+      const target =
+        existing ||
+        ({
+          key,
+          title,
+          hostName: container.host.name,
+          hostColor: container.host.color,
+          containers: [],
+          running: 0,
+          stopped: 0,
+          isStandalone,
+        } as ComposeGroup);
+
+      target.containers.push(container);
+      if (isContainerRunning(container)) {
+        target.running += 1;
+      } else {
+        target.stopped += 1;
+      }
+
+      if (!existing) {
+        groups.set(key, target);
+      }
+    });
+
+    const sorted = Array.from(groups.values()).sort((a, b) => {
+      if (a.isStandalone !== b.isStandalone) {
+        return a.isStandalone ? 1 : -1;
+      }
+      return a.title.localeCompare(b.title);
+    });
+
+    sorted.forEach((group) => {
+      group.containers.sort((a, b) => {
+        const runningDelta = Number(isContainerRunning(b)) - Number(isContainerRunning(a));
+        if (runningDelta !== 0) return runningDelta;
+        return a.name.localeCompare(b.name);
+      });
+    });
+
+    return sorted;
+  }, [containers]);
+
   const handleRefresh = useCallback(() => {
     setManualRefresh(true);
     refreshAll();
     setTimeout(() => setManualRefresh(false), 600);
   }, [refreshAll]);
+
+  const toggleGroup = useCallback((key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
 
   const handleContainerAction = useCallback(
     async (container: ContainerWithHost, action: 'start' | 'stop') => {
@@ -122,151 +179,123 @@ export default function DockerTabScreen() {
     [router]
   );
 
-  const renderHostChip = (host: Host, index: number) => {
-    const isSelected = hostFilter === host.id;
-    const containerCount = containers.filter((c) => c.host.id === host.id).length;
-    const chipColor = host.color || hostColors[index % hostColors.length];
+  const renderContainerRow = (container: ContainerWithHost, isLast: boolean) => {
+    const isRunning = isContainerRunning(container);
+    const isActionLoading = actionInProgress === container.id;
 
     return (
       <Pressable
-        key={host.id}
-        style={[
-          styles.hostChip,
-          isSelected && styles.hostChipSelected,
-          isSelected && { borderColor: chipColor },
-        ]}
-        onPress={() => setHostFilter(isSelected ? null : host.id)}
+        key={container.id}
+        style={[styles.containerRow, !isLast && styles.containerRowBorder]}
+        onPress={() => handleTerminal(container)}
       >
-        <View style={[styles.hostChipDot, { backgroundColor: chipColor }]} />
-        <AppText
-          variant="caps"
-          style={[styles.hostChipText, isSelected && { color: chipColor }]}
-        >
-          {host.name}
-        </AppText>
-        <AppText variant="caps" tone="muted" style={styles.hostChipCount}>
-          {containerCount}
-        </AppText>
+        <PulsingDot
+          color={isRunning ? colors.accent : colors.textMuted}
+          active={isRunning}
+          size={8}
+        />
+        <View style={styles.containerRowInfo}>
+          <AppText variant="body" numberOfLines={1}>
+            {container.name}
+          </AppText>
+          <View style={styles.containerRowMeta}>
+            {container.cpuPercent !== undefined && (
+              <AppText variant="caps" tone="muted">
+                {container.cpuPercent.toFixed(0)}%
+              </AppText>
+            )}
+            {(container.memoryUsage || container.memoryUsedBytes) && (
+              <AppText variant="caps" tone="muted">
+                {container.memoryUsage || formatBytes(container.memoryUsedBytes)}
+              </AppText>
+            )}
+            {container.ports && (
+              <AppText variant="caps" tone="muted" numberOfLines={1}>
+                {container.ports}
+              </AppText>
+            )}
+          </View>
+        </View>
+        <View style={styles.containerRowActions}>
+          <Pressable
+            style={styles.rowActionButton}
+            onPress={() => handleTerminal(container)}
+            hitSlop={8}
+          >
+            <Terminal size={16} color={colors.accent} />
+          </Pressable>
+          {isActionLoading ? (
+            <ActivityIndicator size="small" color={isRunning ? colors.red : colors.accent} />
+          ) : isRunning ? (
+            <Pressable
+              style={styles.rowActionButton}
+              onPress={() => handleContainerAction(container, 'stop')}
+              hitSlop={8}
+            >
+              <Square size={14} color={colors.red} />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.rowActionButton}
+              onPress={() => handleContainerAction(container, 'start')}
+              hitSlop={8}
+            >
+              <Play size={14} color={colors.accent} />
+            </Pressable>
+          )}
+        </View>
       </Pressable>
     );
   };
 
-  const renderContainer = (container: ContainerWithHost, index: number) => {
-    const isRunning = isContainerRunning(container);
-    const isActionLoading = actionInProgress === container.id;
-    const hostColor = container.host.color || colors.accent;
+  const renderComposeGroup = (group: ComposeGroup, index: number) => {
+    const isExpanded = expandedGroups.has(group.key);
+    const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
+    const hostColor = group.hostColor || hostColors[index % hostColors.length];
 
     return (
-      <FadeIn key={container.id} delay={index * 30}>
-        <Pressable onPress={() => handleTerminal(container)}>
-          <Card style={styles.containerCard}>
-            <View style={styles.containerHeader}>
-              <PulsingDot
-                color={isRunning ? colors.accent : colors.textMuted}
-                active={isRunning}
-                size={8}
-              />
-              <View style={styles.containerInfo}>
-                <AppText variant="subtitle" numberOfLines={1}>
-                  {container.name}
+      <FadeIn key={group.key}>
+        <Card style={styles.groupCard}>
+          <Pressable style={styles.groupHeader} onPress={() => toggleGroup(group.key)}>
+            <ChevronIcon size={18} color={colors.textMuted} />
+            <View style={styles.groupTitleContainer}>
+              <AppText variant="body" numberOfLines={1}>
+                {group.title}
+              </AppText>
+              <View style={styles.groupHostRow}>
+                <View style={[styles.hostDot, { backgroundColor: hostColor }]} />
+                <AppText variant="caps" style={styles.hostNameText}>
+                  {group.hostName}
                 </AppText>
-                <View style={styles.containerMeta}>
-                  <View style={[styles.hostBadge, { backgroundColor: withAlpha(hostColor, 0.12) }]}>
-                    <View style={[styles.hostBadgeDot, { backgroundColor: hostColor }]} />
-                    <AppText variant="caps" style={[styles.hostBadgeText, { color: hostColor }]}>
-                      {container.host.name}
-                    </AppText>
-                  </View>
-                  <AppText variant="caps" tone="muted">
-                    {container.state || container.status || 'unknown'}
-                  </AppText>
-                </View>
               </View>
             </View>
-
-            <View style={styles.containerStats}>
-              {container.cpuPercent !== undefined && (
-                <View style={styles.stat}>
-                  <AppText variant="caps" tone="muted">
-                    CPU
-                  </AppText>
-                  <AppText variant="mono" style={styles.statValue}>
-                    {container.cpuPercent.toFixed(1)}%
+            <View style={styles.groupStats}>
+              {group.running > 0 && (
+                <View style={styles.statWithDot}>
+                  <View style={[styles.statDot, { backgroundColor: colors.green }]} />
+                  <AppText variant="caps" style={{ color: colors.green }}>
+                    {group.running}
                   </AppText>
                 </View>
               )}
-              {(container.memoryUsage || container.memoryUsedBytes) && (
-                <View style={styles.stat}>
+              {group.stopped > 0 && (
+                <View style={styles.statWithDot}>
+                  <View style={[styles.statDot, { backgroundColor: colors.textMuted }]} />
                   <AppText variant="caps" tone="muted">
-                    Memory
-                  </AppText>
-                  <AppText variant="mono" style={styles.statValue}>
-                    {container.memoryUsage || formatBytes(container.memoryUsedBytes)}
-                  </AppText>
-                </View>
-              )}
-              {container.ports && (
-                <View style={[styles.stat, styles.statWide]}>
-                  <AppText variant="caps" tone="muted">
-                    Ports
-                  </AppText>
-                  <AppText variant="mono" numberOfLines={1} style={styles.statValue}>
-                    {container.ports}
+                    {group.stopped}
                   </AppText>
                 </View>
               )}
             </View>
-
-            <View style={styles.containerActions}>
-              <Pressable
-                style={[styles.actionButton, styles.actionButtonTerminal]}
-                onPress={() => handleTerminal(container)}
-                disabled={isActionLoading}
-              >
-                <Terminal size={16} color={colors.accent} />
-                <AppText variant="caps" style={styles.actionButtonTextTerminal}>
-                  Terminal
-                </AppText>
-              </Pressable>
-
-              {isRunning ? (
-                <Pressable
-                  style={[styles.actionButton, styles.actionButtonStop]}
-                  onPress={() => handleContainerAction(container, 'stop')}
-                  disabled={isActionLoading}
-                >
-                  {isActionLoading ? (
-                    <ActivityIndicator size="small" color={colors.red} />
-                  ) : (
-                    <>
-                      <Square size={14} color={colors.red} />
-                      <AppText variant="caps" style={styles.actionButtonTextStop}>
-                        Stop
-                      </AppText>
-                    </>
-                  )}
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[styles.actionButton, styles.actionButtonStart]}
-                  onPress={() => handleContainerAction(container, 'start')}
-                  disabled={isActionLoading}
-                >
-                  {isActionLoading ? (
-                    <ActivityIndicator size="small" color={colors.accent} />
-                  ) : (
-                    <>
-                      <Play size={14} color={colors.accent} />
-                      <AppText variant="caps" style={styles.actionButtonTextStart}>
-                        Start
-                      </AppText>
-                    </>
-                  )}
-                </Pressable>
+          </Pressable>
+          {isExpanded && (
+            <View style={styles.groupContainers}>
+              {group.containers.map((container, idx) =>
+                renderContainerRow(container, idx === group.containers.length - 1)
               )}
             </View>
-          </Card>
-        </Pressable>
+          )}
+        </Card>
       </FadeIn>
     );
   };
@@ -286,11 +315,6 @@ export default function DockerTabScreen() {
       <Screen>
         <FadeIn delay={100}>
           <Card style={styles.emptyCard}>
-            <View style={styles.emptyIconContainer}>
-              <AppText variant="title" style={styles.emptyIcon}>
-                {/* Container icon placeholder */}
-              </AppText>
-            </View>
             <AppText variant="subtitle">No hosts configured</AppText>
             <AppText variant="body" tone="muted" style={styles.emptyBody}>
               Add a host to view and manage Docker containers across your servers.
@@ -378,63 +402,9 @@ export default function DockerTabScreen() {
           </View>
         </View>
 
-        {hostsWithContainers.length > 1 && (
-          <View style={styles.hostFilters}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.hostFiltersContent}
-            >
-              <Pressable
-                style={[styles.hostChip, !hostFilter && styles.hostChipSelected]}
-                onPress={() => setHostFilter(null)}
-              >
-                <AppText
-                  variant="caps"
-                  style={[styles.hostChipText, !hostFilter && { color: colors.accent }]}
-                >
-                  All Hosts
-                </AppText>
-              </Pressable>
-              {hostsWithContainers.map((host, index) => renderHostChip(host, index))}
-            </ScrollView>
-          </View>
-        )}
-
-        {filteredRunning.length > 0 && (
-          <>
-            <SectionHeader title={`Running (${filteredRunning.length})`} />
-            <View style={styles.containerList}>
-              {filteredRunning.map((container, index) => renderContainer(container, index))}
-            </View>
-          </>
-        )}
-
-        {filteredStopped.length > 0 && (
-          <>
-            <SectionHeader title={`Stopped (${filteredStopped.length})`} />
-            <View style={styles.containerList}>
-              {filteredStopped.map((container, index) =>
-                renderContainer(container, filteredRunning.length + index)
-              )}
-            </View>
-          </>
-        )}
-
-        {filteredRunning.length === 0 && filteredStopped.length === 0 && hostFilter && (
-          <FadeIn>
-            <Card style={styles.emptyFiltered}>
-              <AppText variant="body" tone="muted">
-                No containers on this host
-              </AppText>
-              <Pressable onPress={() => setHostFilter(null)}>
-                <AppText variant="caps" style={styles.clearFilter}>
-                  Show all
-                </AppText>
-              </Pressable>
-            </Card>
-          </FadeIn>
-        )}
+        <View style={styles.groupList}>
+          {composeGroups.map((group, index) => renderComposeGroup(group, index))}
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -453,227 +423,139 @@ function withAlpha(color: ColorValue, alpha: number): ColorValue {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  scrollContent: {
-    paddingBottom: theme.spacing.xxl,
-    gap: theme.spacing.sm,
-  },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  summaryItem: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: '600',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: colors.separator,
-  },
-  hostFilters: {
-    marginBottom: theme.spacing.xs,
-  },
-  hostFiltersContent: {
-    gap: 8,
-    paddingHorizontal: 2,
-  },
-  hostChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.cardPressed,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  hostChipSelected: {
-    backgroundColor: colors.card,
-    borderColor: colors.accent,
-  },
-  hostChipDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  hostChipText: {
-    color: colors.textMuted,
-  },
-  hostChipCount: {
-    fontSize: 10,
-  },
-  containerList: {
-    gap: theme.spacing.sm,
-  },
-  containerCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  containerHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 6,
-  },
-  statusRunning: {
-    backgroundColor: colors.green,
-    shadowColor: colors.green,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-  },
-  statusStopped: {
-    backgroundColor: colors.textMuted,
-  },
-  containerInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  containerMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  hostBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  hostBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  hostBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  containerStats: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    flexWrap: 'wrap',
-  },
-  stat: {
-    gap: 2,
-  },
-  statWide: {
-    flex: 1,
-    minWidth: 80,
-  },
-  statValue: {
-    fontSize: 13,
-  },
-  containerActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: theme.radii.sm,
-    minWidth: 90,
-  },
-  actionButtonTerminal: {
-    backgroundColor: withAlpha(colors.green, 0.12),
-  },
-  actionButtonStart: {
-    backgroundColor: withAlpha(colors.green, 0.12),
-  },
-  actionButtonStop: {
-    backgroundColor: withAlpha(colors.red, 0.12),
-  },
-  actionButtonTextTerminal: {
-    color: colors.green,
-    fontWeight: '600',
-  },
-  actionButtonTextStart: {
-    color: colors.green,
-    fontWeight: '600',
-  },
-  actionButtonTextStop: {
-    color: colors.red,
-    fontWeight: '600',
-  },
-  emptyCard: {
-    padding: theme.spacing.xl,
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  emptyIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.cardPressed,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.xs,
-  },
-  emptyIcon: {
-    color: colors.textSecondary,
-  },
-  emptyBody: {
-    textAlign: 'center',
-    maxWidth: 260,
-  },
-  cta: {
-    backgroundColor: colors.accent,
-    borderRadius: theme.radii.md,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    marginTop: theme.spacing.sm,
-  },
-  ctaText: {
-    color: colors.accentText,
-  },
-  ctaSecondary: {
-    backgroundColor: colors.cardPressed,
-    borderRadius: theme.radii.md,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginTop: theme.spacing.sm,
-  },
-  ctaSecondaryText: {
-    color: colors.accent,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.md,
-  },
-  loadingText: {
-    marginTop: theme.spacing.xs,
-  },
-  emptyFiltered: {
-    padding: theme.spacing.lg,
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  clearFilter: {
-    color: colors.accent,
-    marginTop: theme.spacing.xs,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    scrollContent: {
+      paddingBottom: theme.spacing.xxl,
+      gap: theme.spacing.sm,
+    },
+    summary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+    },
+    summaryItem: {
+      alignItems: 'center',
+      gap: 2,
+    },
+    summaryValue: {
+      fontSize: 28,
+      fontWeight: '600',
+    },
+    summaryDivider: {
+      width: 1,
+      height: 32,
+      backgroundColor: colors.separator,
+    },
+    groupList: {
+      gap: theme.spacing.sm,
+    },
+    groupCard: {
+      padding: 0,
+      overflow: 'hidden',
+    },
+    groupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      paddingHorizontal: theme.spacing.md,
+    },
+    groupTitleContainer: {
+      flex: 1,
+      gap: 2,
+    },
+    groupHostRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    hostDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    hostNameText: {
+      color: colors.textMuted,
+      fontSize: 10,
+    },
+    groupStats: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    statWithDot: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    statDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    groupContainers: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.separator,
+    },
+    containerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 12,
+      paddingHorizontal: theme.spacing.md,
+    },
+    containerRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.separator,
+    },
+    containerRowInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    containerRowMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    containerRowActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    rowActionButton: {
+      padding: 4,
+    },
+    emptyCard: {
+      padding: theme.spacing.xl,
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+    },
+    emptyBody: {
+      textAlign: 'center',
+      maxWidth: 260,
+    },
+    cta: {
+      backgroundColor: colors.accent,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      marginTop: theme.spacing.sm,
+    },
+    ctaText: {
+      color: colors.accentText,
+    },
+    ctaSecondary: {
+      backgroundColor: colors.cardPressed,
+      borderRadius: theme.radii.md,
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      marginTop: theme.spacing.sm,
+    },
+    ctaSecondaryText: {
+      color: colors.accent,
+    },
+  });
